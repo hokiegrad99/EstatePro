@@ -17,29 +17,44 @@ const App = {
     },
 
     async init() {
-      // Seed default users if none exist
-      const users = this.getUsers();
-      if (users.length === 0) {
+      if (App.Crypto.isEncryptionEnabled() && !App.Crypto.hasPassphrase()) {
+        return;
+      }
+      const users = await App.Crypto.readStorage('estatepro_users');
+      if (!users || users.length === 0) {
         const hashedAdmin = await this.hashPassword('admin');
         const hashedExec = await this.hashPassword('executor');
         const hashedHeir = await this.hashPassword('heir');
         const hashedBen = await this.hashPassword('beneficiary');
-        this.saveUsers([
+        const defaultUsers = [
           { id: 1, username: 'admin', password: hashedAdmin, name: 'System Admin', role: 'Admin', email: 'admin@estatepro.local' },
           { id: 2, username: 'executor', password: hashedExec, name: 'Michael Johnson', role: 'Executor', email: 'michael@email.com' },
           { id: 3, username: 'heir', password: hashedHeir, name: 'Sarah Johnson', role: 'Heir', email: 'sarah@email.com' },
           { id: 4, username: 'beneficiary', password: hashedBen, name: 'David Johnson', role: 'Beneficiary', email: 'david@email.com' }
-        ]);
+        ];
+        this._usersCache = defaultUsers;
+        await App.Crypto.writeStorage('estatepro_users', defaultUsers);
+      } else {
+        this._usersCache = users;
       }
     },
 
     getUsers() {
-      try { return JSON.parse(localStorage.getItem('estatepro_users')) || []; }
-      catch (e) { return []; }
+      if (this._usersCache) return this._usersCache;
+      try {
+        const raw = localStorage.getItem('estatepro_users');
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.ct && parsed.algo) {
+          return [];
+        }
+        return parsed || [];
+      } catch (e) { return []; }
     },
 
     saveUsers(users) {
-      localStorage.setItem('estatepro_users', JSON.stringify(users));
+      this._usersCache = users;
+      return App.Crypto.writeStorage('estatepro_users', users).catch(err => console.error('Failed to save users:', err));
     },
 
     async register(username, password, name, role, email) {
@@ -70,10 +85,13 @@ const App = {
       }
       const session = { id: user.id, username: user.username, name: user.name, role: user.role, email: user.email };
       localStorage.setItem('estatepro_session', JSON.stringify(session));
+      App.Crypto.savePassphraseToSession();
       return { success: true, message: 'Login successful.' };
     },
 
     logout() {
+      App.Crypto.clearPassphraseFromSession();
+      App.Crypto.clearKeyCache();
       localStorage.removeItem('estatepro_session');
       window.location.href = 'index.html';
     },
@@ -110,6 +128,13 @@ const App = {
       if (!allowedRoles.includes(newRole)) {
         return { success: false, message: 'Invalid role.' };
       }
+      // Prevent removing the last admin
+      if (user.role === 'Admin' && newRole !== 'Admin') {
+        const adminCount = users.filter(u => u.role === 'Admin').length;
+        if (adminCount <= 1) {
+          return { success: false, message: 'Cannot remove the last admin.' };
+        }
+      }
       user.role = newRole;
       this.saveUsers(users);
       return { success: true, message: 'User role updated successfully.' };
@@ -143,6 +168,66 @@ const App = {
       user.password = hashedPassword;
       this.saveUsers(users);
       return { success: true, message: 'Password reset successfully.' };
+    },
+
+    async restoreDefaultUsers() {
+      const hashedAdmin = await this.hashPassword('admin');
+      const hashedExec = await this.hashPassword('executor');
+      const hashedHeir = await this.hashPassword('heir');
+      const hashedBen = await this.hashPassword('beneficiary');
+      const defaultUsers = [
+        { id: 1, username: 'admin', password: hashedAdmin, name: 'System Admin', role: 'Admin', email: 'admin@estatepro.local' },
+        { id: 2, username: 'executor', password: hashedExec, name: 'Michael Johnson', role: 'Executor', email: 'michael@email.com' },
+        { id: 3, username: 'heir', password: hashedHeir, name: 'Sarah Johnson', role: 'Heir', email: 'sarah@email.com' },
+        { id: 4, username: 'beneficiary', password: hashedBen, name: 'David Johnson', role: 'Beneficiary', email: 'david@email.com' }
+      ];
+      // Merge: keep existing users, only overwrite default usernames
+      const existing = this.getUsers();
+      const existingMap = new Map(existing.map(u => [u.username, u]));
+      defaultUsers.forEach(u => existingMap.set(u.username, u));
+      this.saveUsers(Array.from(existingMap.values()));
+      return { success: true, message: 'Default users restored. You can now sign in with admin/admin.' };
+    },
+
+    async promoteSelfToAdmin() {
+      const currentUser = this.getCurrentUser();
+      if (!currentUser) {
+        return { success: false, message: 'You must be logged in.' };
+      }
+      const users = this.getUsers();
+      const user = users.find(u => u.id === currentUser.id);
+      if (!user) {
+        return { success: false, message: 'User not found.' };
+      }
+      if (user.role === 'Admin') {
+        return { success: false, message: 'You are already an Admin.' };
+      }
+      user.role = 'Admin';
+      await this.saveUsers(users);
+      // Update session so permissions apply immediately
+      const session = { ...currentUser, role: 'Admin' };
+      localStorage.setItem('estatepro_session', JSON.stringify(session));
+      return { success: true, message: 'Your account has been promoted to Admin.' };
+    },
+
+    async changeOwnPassword(currentPassword, newPassword) {
+      const currentUser = this.getCurrentUser();
+      if (!currentUser) {
+        return { success: false, message: 'You must be logged in to change your password.' };
+      }
+      const users = this.getUsers();
+      const user = users.find(u => u.id === currentUser.id);
+      if (!user) {
+        return { success: false, message: 'User not found.' };
+      }
+      const hashedCurrent = await this.hashPassword(currentPassword);
+      if (user.password !== hashedCurrent) {
+        return { success: false, message: 'Current password is incorrect.' };
+      }
+      const hashedNew = await this.hashPassword(newPassword);
+      user.password = hashedNew;
+      this.saveUsers(users);
+      return { success: true, message: 'Password changed successfully.' };
     }
   },
 
@@ -173,16 +258,261 @@ const App = {
   },
 
   /* ============================
+     CRYPTO
+     ============================ */
+  Crypto: {
+    _passphrase: null,
+    _key: null,
+
+    _arrayBufferToBase64(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    },
+
+    _base64ToArrayBuffer(base64) {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    },
+
+    async _deriveKey(passphrase, salt) {
+      const encoder = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw', encoder.encode(passphrase), { name: 'PBKDF2' }, false, ['deriveKey']
+      );
+      return crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+        keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+      );
+    },
+
+    async _getKey(passphrase) {
+      if (this._key) return this._key;
+      const keySaltRaw = localStorage.getItem('estatepro_key_salt');
+      const salt = keySaltRaw ? this._base64ToArrayBuffer(keySaltRaw) : new Uint8Array(16);
+      this._key = await this._deriveKey(passphrase, salt);
+      return this._key;
+    },
+
+    clearKeyCache() {
+      this._key = null;
+    },
+
+    async encrypt(plaintext, passphrase) {
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const key = await this._getKey(passphrase);
+      const encoder = new TextEncoder();
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv }, key, encoder.encode(plaintext)
+      );
+      return {
+        v: 1,
+        salt: this._arrayBufferToBase64(salt),
+        iv: this._arrayBufferToBase64(iv),
+        ct: this._arrayBufferToBase64(ciphertext),
+        algo: 'AES-GCM-256-PBKDF2'
+      };
+    },
+
+    async decrypt(envelope, passphrase) {
+      const iv = this._base64ToArrayBuffer(envelope.iv);
+      const ct = this._base64ToArrayBuffer(envelope.ct);
+      const keySaltRaw = localStorage.getItem('estatepro_key_salt');
+      if (keySaltRaw) {
+        const key = await this._getKey(passphrase);
+        const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+        return new TextDecoder().decode(decrypted);
+      }
+      // Fallback: old data encrypted without a fixed key salt
+      const salt = this._base64ToArrayBuffer(envelope.salt);
+      const key = await this._deriveKey(passphrase, salt);
+      const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+      return new TextDecoder().decode(decrypted);
+    },
+
+    isEncryptionEnabled() {
+      return localStorage.getItem('estatepro_encrypted') === 'true';
+    },
+
+    async readStorage(key) {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.ct && parsed.algo) {
+          const passphrase = this._passphrase;
+          if (!passphrase) {
+            throw new Error('Passphrase required to decrypt data');
+          }
+          const decrypted = await this.decrypt(parsed, passphrase);
+          return JSON.parse(decrypted);
+        }
+        return parsed;
+      } catch (e) {
+        return null;
+      }
+    },
+
+    async writeStorage(key, value) {
+      if (this.isEncryptionEnabled() && this._passphrase) {
+        const envelope = await this.encrypt(JSON.stringify(value), this._passphrase);
+        localStorage.setItem(key, JSON.stringify(envelope));
+      } else {
+        localStorage.setItem(key, JSON.stringify(value));
+      }
+    },
+
+    async setPassphrase(passphrase) {
+      this._passphrase = passphrase;
+      try {
+        await this._getKey(passphrase);
+      } catch (e) {
+        this._key = null;
+      }
+    },
+
+    loadPassphraseFromSession() {
+      try {
+        const stored = sessionStorage.getItem('estatepro_passphrase');
+        if (stored) {
+          this._passphrase = stored;
+          return true;
+        }
+      } catch (e) { /* sessionStorage may be unavailable */ }
+      return false;
+    },
+
+    savePassphraseToSession() {
+      try {
+        if (this._passphrase) {
+          sessionStorage.setItem('estatepro_passphrase', this._passphrase);
+        } else {
+          sessionStorage.removeItem('estatepro_passphrase');
+        }
+      } catch (e) { /* sessionStorage may be unavailable */ }
+    },
+
+    clearPassphraseFromSession() {
+      try {
+        sessionStorage.removeItem('estatepro_passphrase');
+      } catch (e) { /* sessionStorage may be unavailable */ }
+    },
+
+    getPassphrase() {
+      return this._passphrase;
+    },
+
+    hasPassphrase() {
+      return !!this._passphrase;
+    },
+
+    async verifyPassphrase(passphrase) {
+      const raw = localStorage.getItem('estatepro_key_verify');
+      if (!raw) return false;
+      try {
+        const envelope = JSON.parse(raw);
+        const iv = this._base64ToArrayBuffer(envelope.iv);
+        const ct = this._base64ToArrayBuffer(envelope.ct);
+        const keySaltRaw = localStorage.getItem('estatepro_key_salt');
+        let key;
+        if (keySaltRaw) {
+          const salt = this._base64ToArrayBuffer(keySaltRaw);
+          key = await this._deriveKey(passphrase, salt);
+        } else {
+          const salt = this._base64ToArrayBuffer(envelope.salt);
+          key = await this._deriveKey(passphrase, salt);
+        }
+        const decrypted = await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv }, key, ct
+        );
+        return new TextDecoder().decode(decrypted) === 'EstatePro:v1';
+      } catch (e) {
+        return false;
+      }
+    },
+
+    async setupEncryption(passphrase) {
+      const estate = App.Data.getEstate();
+      const users = App.Auth.getUsers();
+      this._passphrase = passphrase;
+      // Generate and store a fixed key derivation salt
+      const keySalt = crypto.getRandomValues(new Uint8Array(16));
+      localStorage.setItem('estatepro_key_salt', this._arrayBufferToBase64(keySalt));
+      this._key = await this._deriveKey(passphrase, keySalt);
+      const verifyEnvelope = await this.encrypt('EstatePro:v1', passphrase);
+      localStorage.setItem('estatepro_key_verify', JSON.stringify(verifyEnvelope));
+      localStorage.setItem('estatepro_encrypted', 'true');
+      await this.writeStorage('estatepro_estate', estate);
+      await this.writeStorage('estatepro_users', users);
+      return { success: true, message: 'Encryption enabled. All data is now encrypted.' };
+    },
+
+    async changePassphrase(oldPassphrase, newPassphrase) {
+      if (!await this.verifyPassphrase(oldPassphrase)) {
+        return { success: false, message: 'Current passphrase is incorrect.' };
+      }
+      const estate = await this.readStorage('estatepro_estate');
+      const users = await this.readStorage('estatepro_users');
+      this._passphrase = newPassphrase;
+      this._key = null;
+      await this._getKey(newPassphrase);
+      const verifyEnvelope = await this.encrypt('EstatePro:v1', newPassphrase);
+      localStorage.setItem('estatepro_key_verify', JSON.stringify(verifyEnvelope));
+      await this.writeStorage('estatepro_estate', estate);
+      await this.writeStorage('estatepro_users', users);
+      return { success: true, message: 'Passphrase changed successfully.' };
+    },
+
+    async disableEncryption(passphrase) {
+      if (!await this.verifyPassphrase(passphrase)) {
+        return { success: false, message: 'Passphrase is incorrect.' };
+      }
+      const estate = await this.readStorage('estatepro_estate');
+      const users = await this.readStorage('estatepro_users');
+      localStorage.removeItem('estatepro_encrypted');
+      localStorage.removeItem('estatepro_key_verify');
+      localStorage.removeItem('estatepro_key_salt');
+      this._passphrase = null;
+      this._key = null;
+      localStorage.setItem('estatepro_estate', JSON.stringify(estate));
+      localStorage.setItem('estatepro_users', JSON.stringify(users));
+      return { success: true, message: 'Encryption disabled. Data is now stored in plaintext.' };
+    },
+
+    async init() {
+      if (this.isEncryptionEnabled() && !this.hasPassphrase()) {
+        return new Promise((resolve) => {
+          App.UI.showPassphraseModal(async () => {
+            await App.Data.init();
+            await App.Auth.init();
+            resolve();
+          });
+        });
+      }
+      await App.Data.init();
+      await App.Auth.init();
+    }
+  },
+
+  /* ============================
      DATA MANAGEMENT
      ============================ */
   Data: {
-    getEstate() {
-      let estate = null;
-      try { estate = JSON.parse(localStorage.getItem('estatepro_estate')); }
-      catch (e) { /* ignore */ }
+    _cache: null,
+
+    async init() {
+      let estate = await App.Crypto.readStorage('estatepro_estate');
       if (!estate) {
         estate = this.getSeedData();
-        this.saveEstate(estate);
+        await App.Crypto.writeStorage('estatepro_estate', estate);
       } else {
         // Migrate missing fields for existing data
         let migrated = false;
@@ -198,14 +528,56 @@ const App = {
           migrated = true;
         }
         if (migrated) {
-          this.saveEstate(estate);
+          await App.Crypto.writeStorage('estatepro_estate', estate);
         }
+      }
+      this._cache = estate;
+    },
+
+    getEstate() {
+      if (this._cache) return this._cache;
+      // Legacy fallback for plaintext or pre-init state
+      let estate = null;
+      try {
+        const raw = localStorage.getItem('estatepro_estate');
+        if (!raw) return this.getSeedData();
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.ct && parsed.algo) {
+          // Encrypted but not yet decrypted — return safe empty structure
+          return this.getEmptyEstate();
+        }
+        estate = parsed;
+      } catch (e) { /* ignore */ }
+      if (!estate) {
+        estate = this.getSeedData();
+        this.saveEstate(estate);
       }
       return estate;
     },
 
+    getEmptyEstate() {
+      return JSON.parse(JSON.stringify({
+        decedent: {},
+        executor: {},
+        tasks: [],
+        assets: [],
+        debts: [],
+        cashflow: [],
+        heirs: [],
+        distributions: []
+      }));
+    },
+
+    async reloadFromStorage() {
+      const estate = await App.Crypto.readStorage('estatepro_estate');
+      if (estate) {
+        this._cache = estate;
+      }
+    },
+
     saveEstate(estate) {
-      localStorage.setItem('estatepro_estate', JSON.stringify(estate));
+      this._cache = estate;
+      App.Crypto.writeStorage('estatepro_estate', estate).catch(err => console.error('Failed to save estate:', err));
     },
 
     resetData() {
@@ -459,9 +831,16 @@ const App = {
       };
     },
 
-    exportAll() {
+    async exportAll() {
       const data = this.getExportData();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      let exportContent;
+      if (App.Crypto.isEncryptionEnabled() && App.Crypto.hasPassphrase()) {
+        const envelope = await App.Crypto.encrypt(JSON.stringify(data, null, 2), App.Crypto.getPassphrase());
+        exportContent = JSON.stringify(envelope, null, 2);
+      } else {
+        exportContent = JSON.stringify(data, null, 2);
+      }
+      const blob = new Blob([exportContent], { type: 'application/json' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       const date = new Date().toISOString().split('T')[0];
@@ -471,9 +850,16 @@ const App = {
       App.BackupReminder.setLastBackup();
     },
 
-    exportEstateOnly() {
+    async exportEstateOnly() {
       const estate = App.Data.getEstate();
-      const blob = new Blob([JSON.stringify(estate, null, 2)], { type: 'application/json' });
+      let exportContent;
+      if (App.Crypto.isEncryptionEnabled() && App.Crypto.hasPassphrase()) {
+        const envelope = await App.Crypto.encrypt(JSON.stringify(estate, null, 2), App.Crypto.getPassphrase());
+        exportContent = JSON.stringify(envelope, null, 2);
+      } else {
+        exportContent = JSON.stringify(estate, null, 2);
+      }
+      const blob = new Blob([exportContent], { type: 'application/json' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       const date = new Date().toISOString().split('T')[0];
@@ -498,9 +884,24 @@ const App = {
     async importFromFile(file) {
       return new Promise((resolve) => {
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
           try {
-            const json = JSON.parse(e.target.result);
+            let json = JSON.parse(e.target.result);
+            // Check if it's an encrypted backup envelope
+            if (json && json.ct && json.algo) {
+              const passphrase = App.Crypto.getPassphrase();
+              if (!passphrase) {
+                resolve({ success: false, message: 'This backup is encrypted. Please enter your passphrase first (via the Security tab in Sync & Share).' });
+                return;
+              }
+              try {
+                const decrypted = await App.Crypto.decrypt(json, passphrase);
+                json = JSON.parse(decrypted);
+              } catch (err) {
+                resolve({ success: false, message: 'Failed to decrypt backup: ' + err.message });
+                return;
+              }
+            }
             const validation = this.validateImportData(json);
             if (!validation.valid) {
               resolve({ success: false, message: validation.error });
@@ -589,15 +990,37 @@ const App = {
       if (!file || !file.content) {
         throw new Error('No estate data found in this Gist');
       }
-      const data = JSON.parse(file.content);
+      let data;
+      try {
+        const parsed = JSON.parse(file.content);
+        if (parsed && parsed.ct && parsed.algo) {
+          const passphrase = App.Crypto.getPassphrase();
+          if (!passphrase) {
+            throw new Error('This Gist backup is encrypted. Please enter your passphrase first.');
+          }
+          const decrypted = await App.Crypto.decrypt(parsed, passphrase);
+          data = JSON.parse(decrypted);
+        } else {
+          data = parsed;
+        }
+      } catch (e) {
+        throw new Error('Invalid backup data: ' + e.message);
+      }
       return { gist: gist, data: data };
     },
 
     async saveToGist(token, gistId, data) {
+      let exportContent;
+      if (App.Crypto.isEncryptionEnabled() && App.Crypto.hasPassphrase()) {
+        const envelope = await App.Crypto.encrypt(JSON.stringify(data, null, 2), App.Crypto.getPassphrase());
+        exportContent = JSON.stringify(envelope, null, 2);
+      } else {
+        exportContent = JSON.stringify(data, null, 2);
+      }
       const payload = {
         files: {
           'estatepro-backup.json': {
-            content: JSON.stringify(data, null, 2)
+            content: exportContent
           }
         }
       };
@@ -619,12 +1042,19 @@ const App = {
     },
 
     async createGist(token, data) {
+      let exportContent;
+      if (App.Crypto.isEncryptionEnabled() && App.Crypto.hasPassphrase()) {
+        const envelope = await App.Crypto.encrypt(JSON.stringify(data, null, 2), App.Crypto.getPassphrase());
+        exportContent = JSON.stringify(envelope, null, 2);
+      } else {
+        exportContent = JSON.stringify(data, null, 2);
+      }
       const payload = {
         description: 'EstatePro Estate Backup',
         public: false,
         files: {
           'estatepro-backup.json': {
-            content: JSON.stringify(data, null, 2)
+            content: exportContent
           }
         }
       };
@@ -736,6 +1166,12 @@ const App = {
 
       // Show backup reminder if needed
       this.showBackupReminder();
+
+      // Init user menu dropdown on logged-in pages
+      this.initUserMenu();
+
+      // Notify ready callbacks
+      App._setReady();
     },
 
     applyPermissions() {
@@ -789,6 +1225,244 @@ const App = {
     closeModal(modalId) {
       const el = document.getElementById(modalId);
       if (el) el.classList.remove('active');
+    },
+
+    // Passphrase modal
+    renderPassphraseModal() {
+      if (document.getElementById('passphraseModal')) return;
+      const modal = document.createElement('div');
+      modal.id = 'passphraseModal';
+      modal.className = 'modal-overlay active';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.innerHTML = `
+        <div class="modal" style="max-width:400px;">
+          <div class="modal-header">
+            <div class="modal-title">Enter Passphrase</div>
+          </div>
+          <div class="modal-body">
+            <p style="margin-bottom:1rem; color:var(--text-secondary); font-size:0.9rem;">
+              This estate is encrypted. Please enter your passphrase to unlock your data.
+            </p>
+            <form id="passphraseForm">
+              <div class="form-group">
+                <label class="form-label" for="passphraseInput">Passphrase</label>
+                <input type="password" id="passphraseInput" class="form-input" placeholder="Enter your passphrase" required>
+              </div>
+              <div class="btn-group">
+                <button type="submit" class="btn btn-primary">Unlock</button>
+              </div>
+            </form>
+            <div id="passphraseError" style="margin-top:1rem;"></div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    },
+
+    showPassphraseModal(onSubmit) {
+      this.renderPassphraseModal();
+      const form = document.getElementById('passphraseForm');
+      const error = document.getElementById('passphraseError');
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const passphrase = document.getElementById('passphraseInput').value;
+        const valid = await App.Crypto.verifyPassphrase(passphrase);
+        if (valid) {
+          await App.Crypto.setPassphrase(passphrase);
+          App.Crypto.savePassphraseToSession();
+          this.closeModal('passphraseModal');
+          if (onSubmit) onSubmit(passphrase);
+        } else {
+          error.innerHTML = '<div class="alert alert-danger">Invalid passphrase. Please try again.</div>';
+        }
+      };
+    },
+
+    // User menu dropdown
+    initUserMenu() {
+      if (document.body.classList.contains('login-page')) return;
+      const userInfo = document.querySelector('.user-info');
+      if (!userInfo) return;
+      if (userInfo.querySelector('.user-menu-dropdown')) return;
+
+      userInfo.style.position = 'relative';
+      userInfo.style.cursor = 'pointer';
+      userInfo.setAttribute('title', 'Click for user menu');
+      userInfo.setAttribute('tabindex', '0');
+      userInfo.setAttribute('role', 'button');
+      userInfo.setAttribute('aria-haspopup', 'true');
+      userInfo.setAttribute('aria-expanded', 'false');
+
+      const dropdown = document.createElement('div');
+      dropdown.className = 'user-menu-dropdown';
+      dropdown.style.cssText = 'display:none; position:absolute; top:calc(100% + 0.5rem); right:0; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius); box-shadow:0 4px 12px rgba(0,0,0,0.15); min-width:200px; z-index:1000; padding:0.5rem 0; font-size:0.9rem;';
+      dropdown.innerHTML = `
+        <div class="user-menu-header" style="padding:0.5rem 1rem; border-bottom:1px solid var(--border-color); color:var(--text-secondary); font-size:0.8rem;">
+          <div id="userMenuName" style="font-weight:600; color:var(--text-primary);"></div>
+          <div id="userMenuRole" style="font-size:0.75rem;"></div>
+        </div>
+        <button type="button" class="user-menu-item" id="userMenuChangePassword" style="display:block; width:100%; text-align:left; padding:0.5rem 1rem; background:none; border:none; cursor:pointer; color:var(--text-primary); font-size:0.9rem;">
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:0.5rem;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0110 0v4"></path></svg>
+          Change Password
+        </button>
+        <button type="button" class="user-menu-item" id="userMenuPromoteAdmin" style="display:none; width:100%; text-align:left; padding:0.5rem 1rem; background:none; border:none; cursor:pointer; color:var(--text-primary); font-size:0.9rem;">
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:0.5rem;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+          Promote to Admin
+        </button>
+        <button type="button" class="user-menu-item" onclick="App.Auth.logout()" style="display:block; width:100%; text-align:left; padding:0.5rem 1rem; background:none; border:none; cursor:pointer; color:var(--text-primary); font-size:0.9rem;">
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:0.5rem;"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          Logout
+        </button>
+      `;
+      userInfo.appendChild(dropdown);
+
+      const currentUser = App.Auth.getCurrentUser();
+      if (currentUser) {
+        const nameEl = dropdown.querySelector('#userMenuName');
+        const roleEl = dropdown.querySelector('#userMenuRole');
+        if (nameEl) nameEl.textContent = currentUser.name;
+        if (roleEl) roleEl.textContent = App.Permissions.getRoleLabel(currentUser.role);
+      }
+
+      const promoteBtn = dropdown.querySelector('#userMenuPromoteAdmin');
+      if (promoteBtn && currentUser && currentUser.role !== 'Admin') {
+        promoteBtn.style.display = 'block';
+      }
+
+      const toggleDropdown = (e) => {
+        e.stopPropagation();
+        const isOpen = dropdown.style.display === 'block';
+        dropdown.style.display = isOpen ? 'none' : 'block';
+        userInfo.setAttribute('aria-expanded', String(!isOpen));
+      };
+
+      userInfo.addEventListener('click', toggleDropdown);
+      userInfo.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleDropdown(e);
+        }
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!userInfo.contains(e.target)) {
+          dropdown.style.display = 'none';
+          userInfo.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      dropdown.querySelector('#userMenuChangePassword').addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.style.display = 'none';
+        userInfo.setAttribute('aria-expanded', 'false');
+        this.showChangePasswordModal();
+      });
+
+      if (promoteBtn) {
+        promoteBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          dropdown.style.display = 'none';
+          userInfo.setAttribute('aria-expanded', 'false');
+          if (!confirm('Promote your account to Admin? This will give you full access to user management and all settings.')) return;
+          const result = await App.Auth.promoteSelfToAdmin();
+          if (result.success) {
+            alert(result.message + ' The page will refresh to apply changes.');
+            window.location.reload();
+          } else {
+            alert(result.message);
+          }
+        });
+      }
+    },
+
+    // Change Password Modal
+    renderChangePasswordModal() {
+      if (document.getElementById('changePasswordModal')) return;
+      const modal = document.createElement('div');
+      modal.id = 'changePasswordModal';
+      modal.className = 'modal-overlay';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'changePasswordTitle');
+      modal.innerHTML = `
+        <div class="modal" style="max-width:400px;">
+          <div class="modal-header">
+            <div class="modal-title" id="changePasswordTitle">Change Password</div>
+            <button type="button" class="modal-close" onclick="App.UI.closeModal('changePasswordModal')" aria-label="Close change password modal">&times;</button>
+          </div>
+          <div class="modal-body">
+            <p style="margin-bottom:1rem; color:var(--text-secondary); font-size:0.9rem;">Enter your current password and choose a new one.</p>
+            <div class="form-group">
+              <label class="form-label" for="changePasswordCurrent">Current Password</label>
+              <input type="password" id="changePasswordCurrent" class="form-input" placeholder="Enter current password" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="changePasswordNew">New Password</label>
+              <input type="password" id="changePasswordNew" class="form-input" placeholder="Choose a new password" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="changePasswordConfirm">Confirm New Password</label>
+              <input type="password" id="changePasswordConfirm" class="form-input" placeholder="Confirm new password" required>
+            </div>
+            <div id="changePasswordMessage"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="App.UI.closeModal('changePasswordModal')">Cancel</button>
+            <button type="button" class="btn btn-primary" id="changePasswordSubmitBtn">Change Password</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    },
+
+    showChangePasswordModal() {
+      this.renderChangePasswordModal();
+      document.getElementById('changePasswordCurrent').value = '';
+      document.getElementById('changePasswordNew').value = '';
+      document.getElementById('changePasswordConfirm').value = '';
+      document.getElementById('changePasswordMessage').innerHTML = '';
+      this.openModal('changePasswordModal');
+
+      const submitBtn = document.getElementById('changePasswordSubmitBtn');
+      submitBtn.onclick = async () => {
+        const current = document.getElementById('changePasswordCurrent').value;
+        const newPass = document.getElementById('changePasswordNew').value;
+        const confirm = document.getElementById('changePasswordConfirm').value;
+        const msg = document.getElementById('changePasswordMessage');
+
+        if (!current || !newPass || !confirm) {
+          msg.innerHTML = '<div class="alert alert-danger">All fields are required.</div>';
+          return;
+        }
+        if (newPass !== confirm) {
+          msg.innerHTML = '<div class="alert alert-danger">New passwords do not match.</div>';
+          return;
+        }
+        if (newPass.length < 6) {
+          msg.innerHTML = '<div class="alert alert-danger">New password must be at least 6 characters.</div>';
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Changing...';
+        try {
+          const result = await App.Auth.changeOwnPassword(current, newPass);
+          if (result.success) {
+            msg.innerHTML = '<div class="alert alert-success">' + App.UI.escapeHtml(result.message) + '</div>';
+            setTimeout(() => {
+              this.closeModal('changePasswordModal');
+            }, 2000);
+          } else {
+            msg.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(result.message) + '</div>';
+          }
+        } catch (err) {
+          msg.innerHTML = '<div class="alert alert-danger">An error occurred. Please try again.</div>';
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Change Password';
+        }
+      };
     },
 
     // Tab helpers
@@ -875,6 +1549,7 @@ const App = {
               <button type="button" class="tab active" data-tab="export">Export</button>
               <button type="button" class="tab" data-tab="import">Import</button>
               <button type="button" class="tab" data-tab="gist">GitHub Sync</button>
+              <button type="button" class="tab" data-tab="security">Security</button>
             </div>
 
             <div class="tab-panel active" data-panel="export">
@@ -921,6 +1596,42 @@ const App = {
               </div>
             </div>
 
+            <div class="tab-panel" data-panel="security">
+              <p style="margin-bottom:1rem; color:var(--text-secondary); font-size:0.9rem;">
+                Protect your estate data with a passphrase. Encrypted backups are unreadable without the passphrase.
+              </p>
+              <div id="securitySetPassphrase" style="display:none;">
+                <div class="form-group">
+                  <label class="form-label" for="newPassphrase">New Passphrase</label>
+                  <input type="password" id="newPassphrase" class="form-input" placeholder="Choose a strong passphrase">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="confirmPassphrase">Confirm Passphrase</label>
+                  <input type="password" id="confirmPassphrase" class="form-input" placeholder="Confirm passphrase">
+                </div>
+                <button type="button" class="btn btn-primary" id="setPassphraseBtn">Enable Encryption</button>
+              </div>
+              <div id="securityChangePassphrase" style="display:none;">
+                <div class="form-group">
+                  <label class="form-label" for="currentPassphrase">Current Passphrase</label>
+                  <input type="password" id="currentPassphrase" class="form-input" placeholder="Enter current passphrase">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="changeNewPassphrase">New Passphrase</label>
+                  <input type="password" id="changeNewPassphrase" class="form-input" placeholder="Choose a new passphrase">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="changeConfirmPassphrase">Confirm New Passphrase</label>
+                  <input type="password" id="changeConfirmPassphrase" class="form-input" placeholder="Confirm new passphrase">
+                </div>
+                <div class="btn-group">
+                  <button type="button" class="btn btn-primary" id="changePassphraseBtn">Change Passphrase</button>
+                  <button type="button" class="btn btn-danger" id="disableEncryptionBtn">Disable Encryption</button>
+                </div>
+              </div>
+              <div id="securityStatus" class="sync-status"></div>
+            </div>
+
             <div class="tab-panel" data-panel="gist">
               <p style="margin-bottom:1rem; color:var(--text-secondary); font-size:0.9rem;">
                 Sync your estate data to a private GitHub Gist. Share the Gist ID with other users to collaborate.
@@ -964,6 +1675,113 @@ const App = {
       this.initExportHandlers();
       this.initImportHandlers();
       this.initGistHandlers();
+      this.initSecurityHandlers();
+    },
+
+    initSecurityHandlers() {
+      const setPanel = document.getElementById('securitySetPassphrase');
+      const changePanel = document.getElementById('securityChangePassphrase');
+      const setBtn = document.getElementById('setPassphraseBtn');
+      const changeBtn = document.getElementById('changePassphraseBtn');
+      const disableBtn = document.getElementById('disableEncryptionBtn');
+      const status = document.getElementById('securityStatus');
+
+      const updateSecurityUI = () => {
+        const encrypted = App.Crypto.isEncryptionEnabled();
+        if (setPanel) setPanel.style.display = encrypted ? 'none' : 'block';
+        if (changePanel) changePanel.style.display = encrypted ? 'block' : 'none';
+        if (status) status.innerHTML = encrypted ? '<div class="alert alert-success">Encryption is enabled. All backups and localStorage are encrypted.</div>' : '<div class="alert alert-info">Encryption is not enabled. Your data is stored in plaintext.</div>';
+      };
+
+      // Update UI when security tab is shown
+      const tabs = document.querySelectorAll('#syncTabs .tab');
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          if (tab.dataset.tab === 'security') {
+            updateSecurityUI();
+          }
+        });
+      });
+
+      if (setBtn) {
+        setBtn.addEventListener('click', async () => {
+          const newPass = document.getElementById('newPassphrase').value;
+          const confirmPass = document.getElementById('confirmPassphrase').value;
+          if (!newPass || newPass.length < 6) {
+            this.showSyncStatus('securityStatus', 'Passphrase must be at least 6 characters.', 'danger');
+            return;
+          }
+          if (newPass !== confirmPass) {
+            this.showSyncStatus('securityStatus', 'Passphrases do not match.', 'danger');
+            return;
+          }
+          this.showSyncStatus('securityStatus', 'Encrypting data...', 'info');
+          try {
+            const result = await App.Crypto.setupEncryption(newPass);
+            this.showSyncStatus('securityStatus', result.message, 'success');
+            updateSecurityUI();
+            document.getElementById('newPassphrase').value = '';
+            document.getElementById('confirmPassphrase').value = '';
+          } catch (err) {
+            this.showSyncStatus('securityStatus', 'Encryption failed: ' + err.message, 'danger');
+          }
+        });
+      }
+
+      if (changeBtn) {
+        changeBtn.addEventListener('click', async () => {
+          const currentPass = document.getElementById('currentPassphrase').value;
+          const newPass = document.getElementById('changeNewPassphrase').value;
+          const confirmPass = document.getElementById('changeConfirmPassphrase').value;
+          if (!newPass || newPass.length < 6) {
+            this.showSyncStatus('securityStatus', 'New passphrase must be at least 6 characters.', 'danger');
+            return;
+          }
+          if (newPass !== confirmPass) {
+            this.showSyncStatus('securityStatus', 'New passphrases do not match.', 'danger');
+            return;
+          }
+          this.showSyncStatus('securityStatus', 'Changing passphrase...', 'info');
+          try {
+            const result = await App.Crypto.changePassphrase(currentPass, newPass);
+            this.showSyncStatus('securityStatus', result.message, result.success ? 'success' : 'danger');
+            if (result.success) {
+              document.getElementById('currentPassphrase').value = '';
+              document.getElementById('changeNewPassphrase').value = '';
+              document.getElementById('changeConfirmPassphrase').value = '';
+            }
+          } catch (err) {
+            this.showSyncStatus('securityStatus', 'Change failed: ' + err.message, 'danger');
+          }
+        });
+      }
+
+      if (disableBtn) {
+        disableBtn.addEventListener('click', async () => {
+          const currentPass = document.getElementById('currentPassphrase').value;
+          if (!currentPass) {
+            this.showSyncStatus('securityStatus', 'Please enter your current passphrase.', 'danger');
+            return;
+          }
+          if (!confirm('Are you sure you want to disable encryption? Your data will be stored in plaintext.')) {
+            return;
+          }
+          this.showSyncStatus('securityStatus', 'Decrypting data...', 'info');
+          try {
+            const result = await App.Crypto.disableEncryption(currentPass);
+            this.showSyncStatus('securityStatus', result.message, result.success ? 'success' : 'danger');
+            if (result.success) {
+              updateSecurityUI();
+              document.getElementById('currentPassphrase').value = '';
+            }
+          } catch (err) {
+            this.showSyncStatus('securityStatus', 'Disable failed: ' + err.message, 'danger');
+          }
+        });
+      }
+
+      // Initialize UI state
+      updateSecurityUI();
     },
 
     initExportHandlers() {
@@ -1260,11 +2078,55 @@ const App = {
 };
 
 /* ============================================
-   Initialize on page load
+   App init & ready callbacks
    ============================================ */
+App._readyCallbacks = [];
+App._ready = false;
+
+App.onReady = function(callback) {
+  if (this._ready) {
+    callback();
+  } else {
+    this._readyCallbacks.push(callback);
+  }
+};
+
+App._setReady = function() {
+  this._ready = true;
+  this._readyCallbacks.forEach(cb => cb());
+  this._readyCallbacks = [];
+};
+
+App.init = async function() {
+  // Try to restore passphrase from sessionStorage for same-session navigation
+  if (this.Crypto.isEncryptionEnabled() && !this.Crypto.hasPassphrase()) {
+    this.Crypto.loadPassphraseFromSession();
+  }
+  await this.Crypto.init();
+  this.UI.init();
+};
+
+// Track pending writes to warn before unload
+App._pendingWrites = 0;
+const _originalWriteStorage = App.Crypto.writeStorage.bind(App.Crypto);
+App.Crypto.writeStorage = async function(key, value) {
+  App._pendingWrites++;
+  try {
+    return await _originalWriteStorage(key, value);
+  } finally {
+    App._pendingWrites--;
+  }
+};
+
+window.addEventListener('beforeunload', (e) => {
+  if (App._pendingWrites > 0) {
+    e.preventDefault();
+    e.returnValue = 'Data is still being saved. Are you sure you want to leave?';
+  }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
-  App.Auth.init();
-  App.UI.init();
+  App.init();
 });
 
 

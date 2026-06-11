@@ -33,6 +33,9 @@
         admin / admin &nbsp;|&nbsp; executor / executor<br>
         heir / heir &nbsp;|&nbsp; beneficiary / beneficiary
       </div>
+      <div style="margin-top:0.75rem; text-align:center;">
+        <button type="button" id="restoreDefaultsBtn" class="btn btn-sm btn-secondary" style="font-size:0.75rem;">Restore Demo Defaults (admin, executor, heir, beneficiary)</button>
+      </div>
     </form>
 
     <!-- Register Form -->
@@ -61,6 +64,7 @@
         <label class="form-label" for="regRole">Role</label>
         <select id="regRole" class="form-select" required>
           <option value="">Select a role...</option>
+          <option value="Admin">Admin</option>
           <option value="Executor">Executor</option>
           <option value="Heir">Heir</option>
           <option value="Beneficiary">Beneficiary</option>
@@ -144,6 +148,12 @@
         } else {
           authMessage.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(result.message) + '</div>';
         }
+      });
+
+      document.getElementById('restoreDefaultsBtn').addEventListener('click', async () => {
+        if (!confirm('Restore default demo accounts (admin, executor, heir, beneficiary)? Any existing accounts with the same username will be overwritten. Your custom accounts and estate data will be preserved.')) return;
+        const result = await App.Auth.restoreDefaultUsers();
+        authMessage.innerHTML = '<div class="alert alert-' + (result.success ? 'success' : 'danger') + '">' + App.UI.escapeHtml(result.message) + '</div>';
       });
     })();
   </script>

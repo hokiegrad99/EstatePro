@@ -313,8 +313,7 @@
         container.innerHTML = `<div class="alert alert-${type}">${App.UI.escapeHtml(message)}</div>`;
         setTimeout(() => { container.innerHTML = ''; }, 5000);
       }
-
-      renderUsers();
+      App.onReady(renderUsers);
     })();
   </script>
 </body>

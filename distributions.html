@@ -273,8 +273,7 @@
         const estate = App.Data.getEstate();
         App.Export.toCSV(estate.distributions, 'estate-distributions.csv');
       };
-
-      renderDistributions();
+      App.onReady(renderDistributions);
     })();
   </script>
 </body>
