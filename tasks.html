@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EstatePro - Tasks</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">EP</div>
+      <div class="sidebar-brand-text">EstatePro</div>
+    </div>
+    <nav class="sidebar-nav">
+      <ul>
+        <li><a href="dashboard.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Dashboard</a></li>
+        <li><a href="tasks.html" class="active"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Tasks</a></li>
+        <li><a href="executor.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Executor</a></li>
+        <li><a href="decedent.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Mom</a></li>
+        <li><a href="assets.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> Assets</a></li>
+        <li><a href="debts.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg> Debts</a></li>
+        <li><a href="cashflow.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> Cashflow</a></li>
+        <li><a href="heirs.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Heirs</a></li>
+        <li><a href="distributions.html" ><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg> Distributions</a></li>
+        <li><a href="users.html" ><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</a></li><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</a></li>
+      </ul>
+    </nav>
+    <div class="sidebar-footer">EstatePro v1.0<br>Client-side demo</div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="main">
+    <header class="header">
+      <div class="header-left">
+        <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle navigation menu" aria-expanded="false"><svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
+        <span class="page-title">Tasks</span>
+      </div>
+      <div class="header-right">
+        <button class="btn-icon" id="darkModeToggle" title="Toggle Dark Mode" aria-label="Toggle Dark Mode"></button>
+        <div class="user-info">
+          <div class="user-avatar" id="userAvatar"></div>
+          <span id="userName"></span>
+        </div>
+        <button class="btn-icon" onclick="App.Auth.logout()" title="Logout"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg></button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="print-only print-header">
+        <h2>EstatePro - Tasks Report</h2>
+        <p>Estate of Margaret Elizabeth Johnson</p>
+        <p>Generated: <span id="printDate"></span></p>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Estate Tasks</div>
+          <div class="btn-group">
+            <button class="btn btn-secondary btn-sm" onclick="exportTasksCSV()"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> CSV</button>
+            <button class="btn btn-secondary btn-sm" onclick="App.Export.printPDF()"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg> PDF</button>
+            <button class="btn btn-primary btn-sm edit-only" onclick="openTaskModal()"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Task</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="tabs">
+            <button type="button" class="tab active" data-tab="all">All Tasks</button>
+            <button type="button" class="tab" data-tab="pending">Pending</button>
+            <button type="button" class="tab" data-tab="progress">In Progress</button>
+            <button type="button" class="tab" data-tab="completed">Completed</button>
+            <button type="button" class="tab" data-tab="overdue">Overdue</button>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table" id="tasksTable">
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Category</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Due Date</th>
+                  <th>Completed</th>
+                  <th>Notes</th>
+                  <th class="edit-only no-print">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Modal -->
+  <div class="modal-overlay" id="taskModal" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="taskModalTitle">Add Task</div>
+        <button class="modal-close" onclick="App.UI.closeModal('taskModal')" aria-label="Close dialog">&times;</button>
+      </div>
+      <form id="taskForm">
+        <div class="modal-body">
+          <input type="hidden" id="taskId">
+          <div class="form-group">
+            <label class="form-label" for="taskTitle">Task Title</label>
+            <input type="text" id="taskTitle" class="form-input" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="taskCategory">Category</label>
+              <select id="taskCategory" class="form-select" required>
+                <option value="Immediate">Immediate</option>
+                <option value="Probate">Probate</option>
+                <option value="Financial">Financial</option>
+                <option value="Distribution">Distribution</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="taskPriority">Priority</label>
+              <select id="taskPriority" class="form-select" required>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="taskStatus">Status</label>
+              <select id="taskStatus" class="form-select" required>
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="taskDueDate">Due Date</label>
+              <input type="date" id="taskDueDate" class="form-input">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="taskCompletedDate">Completed Date</label>
+            <input type="date" id="taskCompletedDate" class="form-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="taskNotes">Notes</label>
+            <textarea id="taskNotes" class="form-textarea" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.UI.closeModal('taskModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    (function() {
+      const user = App.Auth.checkSession();
+      if (!user) return;
+      document.getElementById('userName').textContent = user.name;
+      document.getElementById('userAvatar').textContent = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+      document.getElementById('printDate').textContent = new Date().toLocaleDateString();
+
+      let currentFilter = 'all';
+      const tabs = document.querySelectorAll('.tab');
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          tabs.forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          currentFilter = tab.dataset.tab;
+          renderTasks();
+        });
+      });
+
+      function renderTasks() {
+        const estate = App.Data.getEstate();
+        let tasks = estate.tasks || [];
+        const today = new Date().toISOString().split('T')[0];
+
+        if (currentFilter === 'pending') tasks = tasks.filter(t => t.status === 'Pending');
+        if (currentFilter === 'progress') tasks = tasks.filter(t => t.status === 'In Progress');
+        if (currentFilter === 'completed') tasks = tasks.filter(t => t.status === 'Completed');
+        if (currentFilter === 'overdue') tasks = tasks.filter(t => t.status !== 'Completed' && t.dueDate && t.dueDate < today);
+
+        const tbody = document.querySelector('#tasksTable tbody');
+        tbody.innerHTML = tasks.map(t => {
+          const priorityBadge = t.priority === 'High' ? 'badge-danger' : t.priority === 'Medium' ? 'badge-warning' : 'badge-default';
+          const statusBadge = t.status === 'Completed' ? 'badge-success' : t.status === 'In Progress' ? 'badge-info' : 'badge-default';
+          const overdue = t.status !== 'Completed' && t.dueDate && t.dueDate < today;
+          const rowStyle = overdue ? 'style="background:var(--danger-light);"' : '';
+          return `<tr ${rowStyle}>
+            <td>${App.UI.escapeHtml(t.title)}</td>
+            <td><span class="badge badge-default">${t.category}</span></td>
+            <td><span class="badge ${priorityBadge}">${t.priority}</span></td>
+            <td><span class="badge ${statusBadge}">${t.status}</span></td>
+            <td>${overdue ? '<span style="color:var(--danger-color); font-weight:600;">' + App.UI.formatDate(t.dueDate) + '</span>' : App.UI.formatDate(t.dueDate)}</td>
+            <td>${App.UI.formatDate(t.completedDate)}</td>
+            <td>${App.UI.escapeHtml(t.notes)}</td>
+            <td class="edit-only no-print">
+              <div class="btn-group">
+                <button class="btn btn-sm btn-secondary" onclick="editTask(${t.id})"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
+                <button class="btn btn-sm btn-danger" onclick="deleteTask(${t.id})"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg></button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('');
+        if (tasks.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-secondary);">No tasks found.</td></tr>';
+        }
+      }
+
+      window.openTaskModal = function(id) {
+        const estate = App.Data.getEstate();
+        document.getElementById('taskForm').reset();
+        document.getElementById('taskId').value = '';
+        document.getElementById('taskModalTitle').textContent = 'Add Task';
+        if (id) {
+          const task = estate.tasks.find(t => t.id === id);
+          if (task) {
+            document.getElementById('taskId').value = task.id;
+            document.getElementById('taskTitle').value = task.title;
+            document.getElementById('taskCategory').value = task.category;
+            document.getElementById('taskPriority').value = task.priority;
+            document.getElementById('taskStatus').value = task.status;
+            document.getElementById('taskDueDate').value = task.dueDate;
+            document.getElementById('taskCompletedDate').value = task.completedDate;
+            document.getElementById('taskNotes').value = task.notes;
+            document.getElementById('taskModalTitle').textContent = 'Edit Task';
+          }
+        }
+        App.UI.openModal('taskModal');
+      };
+
+      window.editTask = function(id) { openTaskModal(id); };
+
+      window.deleteTask = function(id) {
+        if (!confirm('Are you sure you want to delete this task?')) return;
+        const estate = App.Data.getEstate();
+        estate.tasks = estate.tasks.filter(t => t.id !== id);
+        App.Data.saveEstate(estate);
+        renderTasks();
+      };
+
+      document.getElementById('taskForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const estate = App.Data.getEstate();
+        const id = document.getElementById('taskId').value;
+        const task = {
+          id: id ? parseInt(id) : App.Data.getNextId(estate.tasks),
+          title: document.getElementById('taskTitle').value,
+          category: document.getElementById('taskCategory').value,
+          priority: document.getElementById('taskPriority').value,
+          status: document.getElementById('taskStatus').value,
+          dueDate: document.getElementById('taskDueDate').value,
+          completedDate: document.getElementById('taskCompletedDate').value,
+          notes: document.getElementById('taskNotes').value
+        };
+        if (id) {
+          const idx = estate.tasks.findIndex(t => t.id === parseInt(id));
+          if (idx >= 0) estate.tasks[idx] = task;
+        } else {
+          estate.tasks.push(task);
+        }
+        App.Data.saveEstate(estate);
+        App.UI.closeModal('taskModal');
+        renderTasks();
+      });
+
+      window.exportTasksCSV = function() {
+        const estate = App.Data.getEstate();
+        App.Export.toCSV(estate.tasks, 'estate-tasks.csv');
+      };
+
+      renderTasks();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EstatePro - Mom</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">EP</div>
+      <div class="sidebar-brand-text">EstatePro</div>
+    </div>
+    <nav class="sidebar-nav">
+      <ul>
+        <li><a href="dashboard.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Dashboard</a></li>
+        <li><a href="tasks.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Tasks</a></li>
+        <li><a href="executor.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Executor</a></li>
+        <li><a href="decedent.html" class="active"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Mom</a></li>
+        <li><a href="assets.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> Assets</a></li>
+        <li><a href="debts.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg> Debts</a></li>
+        <li><a href="cashflow.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> Cashflow</a></li>
+        <li><a href="heirs.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Heirs</a></li>
+        <li><a href="distributions.html" ><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg> Distributions</a></li>
+        <li><a href="users.html" ><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</a></li><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</a></li>
+      </ul>
+    </nav>
+    <div class="sidebar-footer">EstatePro v1.0<br>Client-side demo</div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="main">
+    <header class="header">
+      <div class="header-left">
+        <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle navigation menu" aria-expanded="false"><svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
+        <span class="page-title">Mom (Decedent)</span>
+      </div>
+      <div class="header-right">
+        <button class="btn-icon" id="darkModeToggle" title="Toggle Dark Mode" aria-label="Toggle Dark Mode"></button>
+        <div class="user-info">
+          <div class="user-avatar" id="userAvatar"></div>
+          <span id="userName"></span>
+        </div>
+        <button class="btn-icon" onclick="App.Auth.logout()" title="Logout"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg></button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="print-only print-header">
+        <h2>EstatePro - Decedent Report</h2>
+        <p>Estate of Margaret Elizabeth Johnson</p>
+        <p>Generated: <span id="printDate"></span></p>
+      </div>
+
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem;">
+        <!-- Personal Info -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Personal Information</div>
+            <div class="btn-group edit-only no-print">
+              <button class="btn btn-sm btn-secondary" onclick="editDecedent()"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit</button>
+            </div>
+          </div>
+          <div class="card-body" id="decedentCard">
+            <div style="display:grid; gap: 0.75rem; font-size:0.9rem;">
+              <div><strong style="color:var(--text-secondary);">Full Name:</strong> <span id="decFullName"></span></div>
+              <div><strong style="color:var(--text-secondary);">Date of Birth:</strong> <span id="decDob"></span></div>
+              <div><strong style="color:var(--text-secondary);">Date of Death:</strong> <span id="decDod"></span></div>
+              <div><strong style="color:var(--text-secondary);">SSN:</strong> <span id="decSsn"></span></div>
+              <div><strong style="color:var(--text-secondary);">Marital Status:</strong> <span id="decMarital"></span></div>
+              <div><strong style="color:var(--text-secondary);">Address:</strong> <span id="decAddress"></span></div>
+            </div>
+          </div>
+          <div class="card-body" id="decedentEdit" style="display:none;">
+            <form id="decedentForm">
+              <div class="form-group">
+                <label class="form-label" for="editDecFullName">Full Name</label>
+                <input type="text" id="editDecFullName" class="form-input" required>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="editDecDob">Date of Birth</label>
+                  <input type="date" id="editDecDob" class="form-input">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="editDecDod">Date of Death</label>
+                  <input type="date" id="editDecDod" class="form-input">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="editDecSsn">SSN</label>
+                  <input type="text" id="editDecSsn" class="form-input">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="editDecMarital">Marital Status</label>
+                  <input type="text" id="editDecMarital" class="form-input">
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="editDecAddress">Address</label>
+                <input type="text" id="editDecAddress" class="form-input">
+              </div>
+              <div class="btn-group">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-secondary" onclick="cancelEditDecedent()">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Death Details -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg> Death & Location Details</div>
+            <div class="btn-group edit-only no-print">
+              <button class="btn btn-sm btn-secondary" onclick="editDeathDetails()"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit</button>
+            </div>
+          </div>
+          <div class="card-body" id="deathCard">
+            <div style="display:grid; gap: 0.75rem; font-size:0.9rem;">
+              <div><strong style="color:var(--text-secondary);">Place of Death:</strong> <span id="decPlace"></span></div>
+              <div><strong style="color:var(--text-secondary);">State of Residence:</strong> <span id="decState"></span></div>
+              <div><strong style="color:var(--text-secondary);">County of Residence:</strong> <span id="decCounty"></span></div>
+              <div><strong style="color:var(--text-secondary);">Funeral Home:</strong> <span id="decFuneral"></span></div>
+              <div><strong style="color:var(--text-secondary);">Obituary Published:</strong> <span id="decObit"></span></div>
+            </div>
+          </div>
+          <div class="card-body" id="deathEdit" style="display:none;">
+            <form id="deathForm">
+              <div class="form-group">
+                <label class="form-label" for="editDecPlace">Place of Death</label>
+                <input type="text" id="editDecPlace" class="form-input">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="editDecState">State of Residence</label>
+                  <input type="text" id="editDecState" class="form-input">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="editDecCounty">County of Residence</label>
+                  <input type="text" id="editDecCounty" class="form-input">
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="editDecFuneral">Funeral Home</label>
+                <input type="text" id="editDecFuneral" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="editDecObit">Obituary Published</label>
+                <input type="text" id="editDecObit" class="form-input" placeholder="e.g., Yes - Springfield Gazette, Jan 12, 2024">
+              </div>
+              <div class="btn-group">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-secondary" onclick="cancelEditDeathDetails()">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Will & Documents -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> Will & Estate Documents</div>
+            <div class="btn-group edit-only no-print">
+              <button class="btn btn-sm btn-secondary" onclick="editWillDocs()"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit</button>
+            </div>
+          </div>
+          <div class="card-body" id="willCard">
+            <div style="display:grid; gap: 0.75rem; font-size:0.9rem;">
+              <div><strong style="color:var(--text-secondary);">Will Location:</strong> <span id="decWill"></span></div>
+              <div><strong style="color:var(--text-secondary);">Executor Named in Will:</strong> <span id="decExecNamed"></span></div>
+              <div style="margin-top:0.5rem; padding:0.75rem; background:var(--bg-primary); border-radius:var(--radius);">
+                <strong style="color:var(--text-secondary); font-size:0.8rem;">IMPORTANT DOCUMENTS CHECKLIST</strong>
+                <div id="documentsChecklist" style="margin-top:0.5rem; display:grid; gap:0.35rem;"></div>
+              </div>
+            </div>
+          </div>
+          <div class="card-body" id="willEdit" style="display:none;">
+            <form id="willForm">
+              <div class="form-group">
+                <label class="form-label" for="editDecWill">Will Location</label>
+                <input type="text" id="editDecWill" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="editDecExecNamed">Executor Named in Will</label>
+                <input type="text" id="editDecExecNamed" class="form-input">
+              </div>
+              <div style="margin-top:1rem;">
+                <strong style="color:var(--text-secondary); font-size:0.85rem;">Documents Checklist</strong>
+                <div id="editDocumentsList" style="margin-top:0.5rem; display:grid; gap:0.5rem;"></div>
+                <div class="btn-group" style="margin-top:0.75rem;">
+                  <button type="button" class="btn btn-sm btn-secondary" onclick="addDocumentItem()">
+                    <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    Add Document
+                  </button>
+                </div>
+              </div>
+              <div class="btn-group" style="margin-top:1rem;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-secondary" onclick="cancelEditWillDocs()">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:1.5rem;">
+        <div class="card-header">
+          <div class="card-title"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Export</div>
+        </div>
+        <div class="card-body">
+          <div class="btn-group">
+            <button class="btn btn-secondary" onclick="exportDecedentCSV()"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Export CSV</button>
+            <button class="btn btn-secondary" onclick="App.Export.printPDF()"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg> Print / Save PDF</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    (function() {
+      const user = App.Auth.checkSession();
+      if (!user) return;
+      document.getElementById('userName').textContent = user.name;
+      document.getElementById('userAvatar').textContent = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+      document.getElementById('printDate').textContent = new Date().toLocaleDateString();
+
+      function renderDocuments() {
+        const estate = App.Data.getEstate();
+        const docs = estate.decedent.documents || [];
+        const container = document.getElementById('documentsChecklist');
+        if (!container) return;
+        const statusBadge = (status) => {
+          const classes = { Found: 'badge-success', Missing: 'badge-warning', 'Not Applicable': 'badge-default' };
+          const icons = {
+            Found: '<svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+            Missing: '<svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>',
+            'Not Applicable': '<svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>'
+          };
+          return `<span class="badge ${classes[status] || 'badge-default'}">${icons[status] || ''} ${status}</span>`;
+        };
+        const today = new Date(new Date().toDateString());
+        const isOverdue = (dueDate) => {
+          if (!dueDate) return false;
+          return new Date(dueDate + 'T00:00:00') < today;
+        };
+        container.innerHTML = docs.map(doc => `
+          <div class="checklist-item">
+            <span class="checklist-item-status">${statusBadge(doc.status)}</span>
+            <span class="checklist-item-name">${App.UI.escapeHtml(doc.name)}</span>
+            ${doc.assignedTo ? `<span class="checklist-item-assigned">${App.UI.escapeHtml(doc.assignedTo)}</span>` : ''}
+            ${doc.dueDate ? `<span class="checklist-item-due ${isOverdue(doc.dueDate) && doc.status !== 'Found' ? 'checklist-item-due-overdue' : ''}">${isOverdue(doc.dueDate) && doc.status !== 'Found' ? '<svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> ' : ''}Due ${App.UI.formatDate(doc.dueDate)}</span>` : ''}
+            ${doc.notes ? `<span class="checklist-item-notes">${App.UI.escapeHtml(doc.notes)}</span>` : ''}
+          </div>
+        `).join('');
+      }
+
+      function renderDecedent() {
+        const estate = App.Data.getEstate();
+        const d = estate.decedent;
+        document.getElementById('decFullName').textContent = d.fullName;
+        document.getElementById('decDob').textContent = App.UI.formatDate(d.dateOfBirth);
+        document.getElementById('decDod').textContent = App.UI.formatDate(d.dateOfDeath);
+        document.getElementById('decSsn').textContent = d.ssn;
+        document.getElementById('decMarital').textContent = d.maritalStatus;
+        document.getElementById('decAddress').textContent = d.address;
+        document.getElementById('decPlace').textContent = d.placeOfDeath || '-';
+        document.getElementById('decState').textContent = d.stateOfResidence || '-';
+        document.getElementById('decCounty').textContent = d.countyOfResidence || '-';
+        document.getElementById('decFuneral').textContent = d.funeralHome || '-';
+        document.getElementById('decObit').textContent = d.obituaryPublished || '-';
+        document.getElementById('decWill').textContent = d.willLocation || '-';
+        document.getElementById('decExecNamed').textContent = d.executorNamed || '-';
+        renderDocuments();
+      }
+
+      window.editDecedent = function() {
+        const estate = App.Data.getEstate();
+        const d = estate.decedent;
+        document.getElementById('editDecFullName').value = d.fullName || '';
+        document.getElementById('editDecDob').value = d.dateOfBirth || '';
+        document.getElementById('editDecDod').value = d.dateOfDeath || '';
+        document.getElementById('editDecSsn').value = d.ssn || '';
+        document.getElementById('editDecMarital').value = d.maritalStatus || '';
+        document.getElementById('editDecAddress').value = d.address || '';
+        document.getElementById('decedentCard').style.display = 'none';
+        document.getElementById('decedentEdit').style.display = 'block';
+      };
+
+      window.cancelEditDecedent = function() {
+        document.getElementById('decedentEdit').style.display = 'none';
+        document.getElementById('decedentCard').style.display = 'block';
+      };
+
+      document.getElementById('decedentForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const estate = App.Data.getEstate();
+        estate.decedent.fullName = document.getElementById('editDecFullName').value;
+        estate.decedent.dateOfBirth = document.getElementById('editDecDob').value;
+        estate.decedent.dateOfDeath = document.getElementById('editDecDod').value;
+        estate.decedent.ssn = document.getElementById('editDecSsn').value;
+        estate.decedent.maritalStatus = document.getElementById('editDecMarital').value;
+        estate.decedent.address = document.getElementById('editDecAddress').value;
+        App.Data.saveEstate(estate);
+        renderDecedent();
+        cancelEditDecedent();
+      });
+
+      window.editDeathDetails = function() {
+        const estate = App.Data.getEstate();
+        const d = estate.decedent;
+        document.getElementById('editDecPlace').value = d.placeOfDeath || '';
+        document.getElementById('editDecState').value = d.stateOfResidence || '';
+        document.getElementById('editDecCounty').value = d.countyOfResidence || '';
+        document.getElementById('editDecFuneral').value = d.funeralHome || '';
+        document.getElementById('editDecObit').value = d.obituaryPublished || '';
+        document.getElementById('deathCard').style.display = 'none';
+        document.getElementById('deathEdit').style.display = 'block';
+      };
+
+      window.cancelEditDeathDetails = function() {
+        document.getElementById('deathEdit').style.display = 'none';
+        document.getElementById('deathCard').style.display = 'block';
+      };
+
+      document.getElementById('deathForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const estate = App.Data.getEstate();
+        estate.decedent.placeOfDeath = document.getElementById('editDecPlace').value;
+        estate.decedent.stateOfResidence = document.getElementById('editDecState').value;
+        estate.decedent.countyOfResidence = document.getElementById('editDecCounty').value;
+        estate.decedent.funeralHome = document.getElementById('editDecFuneral').value;
+        estate.decedent.obituaryPublished = document.getElementById('editDecObit').value;
+        App.Data.saveEstate(estate);
+        renderDecedent();
+        cancelEditDeathDetails();
+      });
+
+      let editingDocuments = [];
+
+      function renderEditDocumentsList() {
+        const container = document.getElementById('editDocumentsList');
+        if (!container) return;
+        container.innerHTML = editingDocuments.map((doc, index) => `
+          <div class="checklist-edit-row" data-index="${index}">
+            <input type="text" class="form-input doc-name" placeholder="Document name" value="${App.UI.escapeHtml(doc.name)}" onchange="updateDocumentName(${index}, this.value)">
+            <select class="form-select doc-status" onchange="updateDocumentStatus(${index}, this.value)">
+              <option value="Found" ${doc.status === 'Found' ? 'selected' : ''}>Found</option>
+              <option value="Missing" ${doc.status === 'Missing' ? 'selected' : ''}>Missing</option>
+              <option value="Not Applicable" ${doc.status === 'Not Applicable' ? 'selected' : ''}>Not Applicable</option>
+            </select>
+            <input type="date" class="form-input doc-due" placeholder="Due date" value="${App.UI.escapeHtml(doc.dueDate || '')}" onchange="updateDocumentDueDate(${index}, this.value)">
+            <input type="text" class="form-input doc-assigned" placeholder="Assigned to" value="${App.UI.escapeHtml(doc.assignedTo || '')}" onchange="updateDocumentAssignedTo(${index}, this.value)">
+            <input type="text" class="form-input doc-notes" placeholder="Notes (optional)" value="${App.UI.escapeHtml(doc.notes || '')}" onchange="updateDocumentNotes(${index}, this.value)">
+            <button type="button" class="btn-icon" onclick="deleteDocumentItem(${index})" title="Remove" aria-label="Remove document">
+              <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg>
+            </button>
+          </div>
+        `).join('');
+      }
+
+      window.updateDocumentName = function(index, value) {
+        editingDocuments[index].name = value;
+      };
+
+      window.updateDocumentStatus = function(index, value) {
+        editingDocuments[index].status = value;
+      };
+
+      window.updateDocumentDueDate = function(index, value) {
+        editingDocuments[index].dueDate = value;
+      };
+
+      window.updateDocumentAssignedTo = function(index, value) {
+        editingDocuments[index].assignedTo = value;
+      };
+
+      window.updateDocumentNotes = function(index, value) {
+        editingDocuments[index].notes = value;
+      };
+
+      window.deleteDocumentItem = function(index) {
+        editingDocuments.splice(index, 1);
+        renderEditDocumentsList();
+      };
+
+      window.addDocumentItem = function() {
+        const nextId = editingDocuments.length > 0 ? Math.max(...editingDocuments.map(d => d.id || 0)) + 1 : 1;
+        editingDocuments.push({ id: nextId, name: '', status: 'Missing', dueDate: '', assignedTo: '', notes: '' });
+        renderEditDocumentsList();
+      };
+
+      window.editWillDocs = function() {
+        const estate = App.Data.getEstate();
+        const d = estate.decedent;
+        document.getElementById('editDecWill').value = d.willLocation || '';
+        document.getElementById('editDecExecNamed').value = d.executorNamed || '';
+        editingDocuments = JSON.parse(JSON.stringify(d.documents || []));
+        renderEditDocumentsList();
+        document.getElementById('willCard').style.display = 'none';
+        document.getElementById('willEdit').style.display = 'block';
+      };
+
+      window.cancelEditWillDocs = function() {
+        document.getElementById('willEdit').style.display = 'none';
+        document.getElementById('willCard').style.display = 'block';
+        editingDocuments = [];
+      };
+
+      document.getElementById('willForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const estate = App.Data.getEstate();
+        estate.decedent.willLocation = document.getElementById('editDecWill').value;
+        estate.decedent.executorNamed = document.getElementById('editDecExecNamed').value;
+        // Read all document values directly from DOM to avoid stale onchange data
+        const rows = document.querySelectorAll('#editDocumentsList .checklist-edit-row');
+        const docs = [];
+        rows.forEach(row => {
+          const name = row.querySelector('.doc-name')?.value.trim() || '';
+          const status = row.querySelector('.doc-status')?.value || 'Missing';
+          const dueDate = row.querySelector('.doc-due')?.value || '';
+          const assignedTo = row.querySelector('.doc-assigned')?.value.trim() || '';
+          const notes = row.querySelector('.doc-notes')?.value.trim() || '';
+          if (name) {
+            docs.push({ id: App.Data.getNextId(docs), name, status, dueDate, assignedTo, notes });
+          }
+        });
+        estate.decedent.documents = docs;
+        App.Data.saveEstate(estate);
+        renderDecedent();
+        cancelEditWillDocs();
+      });
+
+      window.exportDecedentCSV = function() {
+        const estate = App.Data.getEstate();
+        const d = estate.decedent;
+        const data = [
+          { Field: 'Full Name', Value: d.fullName },
+          { Field: 'Date of Birth', Value: d.dateOfBirth },
+          { Field: 'Date of Death', Value: d.dateOfDeath },
+          { Field: 'SSN', Value: d.ssn },
+          { Field: 'Marital Status', Value: d.maritalStatus },
+          { Field: 'Address', Value: d.address },
+          { Field: 'State of Residence', Value: d.stateOfResidence },
+          { Field: 'County of Residence', Value: d.countyOfResidence },
+          { Field: 'Place of Death', Value: d.placeOfDeath },
+          { Field: 'Funeral Home', Value: d.funeralHome },
+          { Field: 'Will Location', Value: d.willLocation },
+          { Field: 'Executor Named', Value: d.executorNamed },
+          { Field: 'Obituary', Value: d.obituaryPublished }
+        ];
+        const docs = (d.documents || []).map((doc, i) => ({
+          Field: `Document ${i + 1}`,
+          Value: `${doc.name} (${doc.status})${doc.assignedTo ? ' | Assigned: ' + doc.assignedTo : ''}${doc.dueDate ? ' | Due: ' + doc.dueDate : ''}${doc.notes ? ' | Notes: ' + doc.notes : ''}`
+        }));
+        App.Export.toCSV(data.concat(docs), 'estate-decedent.csv');
+      };
+
+      renderDecedent();
+    })();
+  </script>
+</body>
+</html>

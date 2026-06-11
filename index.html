@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EstatePro - Login</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-brand-icon">EP</div>
+      <h1>EstatePro</h1>
+      <p>Estate Executor & Administration Manager</p>
+    </div>
+
+    <!-- Login Form -->
+    <form id="loginForm" class="form-section">
+      <div class="form-group">
+        <label class="form-label" for="loginUsername">Username</label>
+        <input type="text" id="loginUsername" class="form-input" placeholder="Enter your username" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" class="form-input" placeholder="Enter your password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary btn-lg" style="width:100%; margin-top:0.5rem;">Sign In</button>
+      <div class="login-toggle">
+        Don't have an account? <a id="showRegister">Register</a>
+      </div>
+      <div style="margin-top:1rem; padding:0.75rem; background:var(--bg-primary); border-radius:var(--radius); font-size:0.8rem; color:var(--text-secondary);">
+        <strong>Demo Credentials:</strong><br>
+        admin / admin &nbsp;|&nbsp; executor / executor<br>
+        heir / heir &nbsp;|&nbsp; beneficiary / beneficiary
+      </div>
+    </form>
+
+    <!-- Register Form -->
+    <form id="registerForm" class="form-section" style="display:none;">
+      <div class="form-group">
+        <label class="form-label" for="regName">Full Name</label>
+        <input type="text" id="regName" class="form-input" placeholder="Enter your full name" required autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="regEmail">Email</label>
+        <input type="email" id="regEmail" class="form-input" placeholder="Enter your email" required autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="regUsername">Username</label>
+        <input type="text" id="regUsername" class="form-input" placeholder="Choose a username" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="regPassword">Password</label>
+        <input type="password" id="regPassword" class="form-input" placeholder="Choose a password" required autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="regPasswordConfirm">Confirm Password</label>
+        <input type="password" id="regPasswordConfirm" class="form-input" placeholder="Confirm your password" required autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="regRole">Role</label>
+        <select id="regRole" class="form-select" required>
+          <option value="">Select a role...</option>
+          <option value="Executor">Executor</option>
+          <option value="Heir">Heir</option>
+          <option value="Beneficiary">Beneficiary</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary btn-lg" style="width:100%; margin-top:0.5rem;">Create Account</button>
+      <div class="login-toggle">
+        Already have an account? <a id="showLogin">Sign In</a>
+      </div>
+    </form>
+
+    <div id="authMessage"></div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    (function() {
+      // Redirect if already logged in
+      if (App.Auth.isLoggedIn()) {
+        window.location.href = 'dashboard.html';
+        return;
+      }
+
+      const loginForm = document.getElementById('loginForm');
+      const registerForm = document.getElementById('registerForm');
+      const showRegister = document.getElementById('showRegister');
+      const showLogin = document.getElementById('showLogin');
+      const authMessage = document.getElementById('authMessage');
+
+      showRegister.addEventListener('click', (e) => {
+        e.preventDefault();
+        loginForm.style.display = 'none';
+        registerForm.style.display = 'block';
+        authMessage.innerHTML = '';
+      });
+
+      showLogin.addEventListener('click', (e) => {
+        e.preventDefault();
+        registerForm.style.display = 'none';
+        loginForm.style.display = 'block';
+        authMessage.innerHTML = '';
+      });
+
+      loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const result = await App.Auth.login(username, password);
+        if (result.success) {
+          window.location.href = 'dashboard.html';
+        } else {
+          authMessage.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(result.message) + '</div>';
+        }
+      });
+
+      registerForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('regName').value.trim();
+        const email = document.getElementById('regEmail').value.trim();
+        const username = document.getElementById('regUsername').value.trim();
+        const password = document.getElementById('regPassword').value;
+        const confirmPassword = document.getElementById('regPasswordConfirm').value;
+        const role = document.getElementById('regRole').value;
+        if (password !== confirmPassword) {
+          authMessage.innerHTML = '<div class="alert alert-danger">Passwords do not match.</div>';
+          return;
+        }
+        if (password.length < 6) {
+          authMessage.innerHTML = '<div class="alert alert-danger">Password must be at least 6 characters.</div>';
+          return;
+        }
+        if (!role) {
+          authMessage.innerHTML = '<div class="alert alert-danger">Please select a role.</div>';
+          return;
+        }
+        const result = await App.Auth.register(username, password, name, role, email);
+        if (result.success) {
+          authMessage.innerHTML = '<div class="alert alert-success">' + App.UI.escapeHtml(result.message) + ' Please sign in.</div>';
+          registerForm.style.display = 'none';
+          loginForm.style.display = 'block';
+        } else {
+          authMessage.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(result.message) + '</div>';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

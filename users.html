@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EstatePro - User Management</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">EP</div>
+      <div class="sidebar-brand-text">EstatePro</div>
+    </div>
+    <nav class="sidebar-nav">
+      <ul>
+        <li><a href="dashboard.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Dashboard</a></li>
+        <li><a href="tasks.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Tasks</a></li>
+        <li><a href="executor.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Executor</a></li>
+        <li><a href="decedent.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Mom</a></li>
+        <li><a href="assets.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> Assets</a></li>
+        <li><a href="debts.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg> Debts</a></li>
+        <li><a href="cashflow.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> Cashflow</a></li>
+        <li><a href="heirs.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Heirs</a></li>
+        <li><a href="distributions.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg> Distributions</a></li>
+        <li><a href="users.html" class="active"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</a></li>
+      </ul>
+    </nav>
+    <div class="sidebar-footer">
+      EstatePro v1.0<br>Client-side demo
+    </div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Main Content -->
+  <div class="main">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle navigation menu" aria-expanded="false"><svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
+        <span class="page-title">User Management</span>
+      </div>
+      <div class="header-right">
+        <button class="btn-icon" id="darkModeToggle" title="Toggle Dark Mode" aria-label="Toggle Dark Mode"></button>
+        <div class="user-info">
+          <div class="user-avatar" id="userAvatar"></div>
+          <span id="userName"></span>
+        </div>
+        <button class="btn-icon" onclick="App.Auth.logout()" title="Logout"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg></button>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div class="content">
+      <!-- Access Denied -->
+      <div id="accessDenied" class="card" style="display:none;">
+        <div class="card-body" style="text-align:center; padding:2rem;">
+          <div style="font-size:3rem; margin-bottom:1rem;">&#128274;</div>
+          <h2>Access Denied</h2>
+          <p style="color:var(--text-secondary);">You must be an Administrator to manage user accounts.</p>
+          <a href="dashboard.html" class="btn btn-primary" style="margin-top:1rem;">Go to Dashboard</a>
+        </div>
+      </div>
+
+      <!-- Users Panel -->
+      <div id="usersPanel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</div>
+            <div class="btn-group">
+              <button class="btn btn-secondary btn-sm" id="exportUsersBtn">
+                <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Export CSV
+              </button>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-responsive">
+              <table class="data-table" id="usersTable">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th style="text-align:right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add User Card -->
+        <div class="card" style="margin-top:1.5rem;">
+          <div class="card-header">
+            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg> Add User</div>
+          </div>
+          <div class="card-body">
+            <form id="addUserForm">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="addUserName">Full Name</label>
+                  <input type="text" id="addUserName" class="form-input" placeholder="Enter full name" required autocomplete="name">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="addUserEmail">Email</label>
+                  <input type="email" id="addUserEmail" class="form-input" placeholder="Enter email" required autocomplete="email">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="addUserUsername">Username</label>
+                  <input type="text" id="addUserUsername" class="form-input" placeholder="Choose username" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="addUserPassword">Password</label>
+                  <input type="password" id="addUserPassword" class="form-input" placeholder="Set password" required autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="addUserRole">Role</label>
+                  <select id="addUserRole" class="form-select" required>
+                    <option value="">Select role...</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Executor">Executor</option>
+                    <option value="Heir">Heir</option>
+                    <option value="Beneficiary">Beneficiary</option>
+                  </select>
+                </div>
+              </div>
+              <div id="addUserMessage" style="margin-bottom:1rem;"></div>
+              <button type="submit" class="btn btn-primary">Create User</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reset Password Modal -->
+  <div class="modal-overlay" id="resetPasswordModal" role="dialog" aria-modal="true" aria-labelledby="resetPasswordTitle">
+    <div class="modal" style="max-width:400px;">
+      <div class="modal-header">
+        <div class="modal-title" id="resetPasswordTitle">Reset Password</div>
+        <button type="button" class="modal-close" onclick="App.UI.closeModal('resetPasswordModal')" aria-label="Close reset password modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom:1rem; color:var(--text-secondary); font-size:0.9rem;">Set a new password for <strong id="resetPasswordUserName"></strong>.</p>
+        <div class="form-group">
+          <label class="form-label" for="resetPasswordInput">New Password</label>
+          <input type="password" id="resetPasswordInput" class="form-input" placeholder="Enter new password" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="resetPasswordConfirm">Confirm Password</label>
+          <input type="password" id="resetPasswordConfirm" class="form-input" placeholder="Confirm new password" required>
+        </div>
+        <div id="resetPasswordMessage"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="App.UI.closeModal('resetPasswordModal')">Cancel</button>
+        <button type="button" class="btn btn-primary" id="resetPasswordConfirmBtn">Reset Password</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    (function() {
+      // Auth check
+      const user = App.Auth.checkSession();
+      if (!user) return;
+      document.getElementById('userName').textContent = user.name;
+      document.getElementById('userAvatar').textContent = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+      // Admin check
+      if (!App.Permissions.canManageUsers()) {
+        document.getElementById('accessDenied').style.display = 'block';
+        document.getElementById('usersPanel').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('accessDenied').style.display = 'none';
+      document.getElementById('usersPanel').style.display = 'block';
+
+      let pendingResetUserId = null;
+
+      function renderUsers() {
+        const users = App.Auth.getUsers();
+        const currentUser = App.Auth.getCurrentUser();
+        const tbody = document.querySelector('#usersTable tbody');
+        tbody.innerHTML = users.map(u => {
+          const isSelf = currentUser && currentUser.id === u.id;
+          const isAdmin = u.role === 'Admin';
+          const roleBadge = u.role === 'Admin' ? 'badge-danger' : u.role === 'Executor' ? 'badge-info' : 'badge-default';
+          return `<tr>
+            <td>${App.UI.escapeHtml(u.name)}</td>
+            <td>${App.UI.escapeHtml(u.username)}${isSelf ? ' <span class="badge badge-default">You</span>' : ''}</td>
+            <td>${App.UI.escapeHtml(u.email)}</td>
+            <td>
+              <select class="form-select user-role-select" data-user-id="${u.id}" ${isSelf ? 'disabled' : ''}>
+                <option value="Admin" ${u.role === 'Admin' ? 'selected' : ''}>Admin</option>
+                <option value="Executor" ${u.role === 'Executor' ? 'selected' : ''}>Executor</option>
+                <option value="Heir" ${u.role === 'Heir' ? 'selected' : ''}>Heir</option>
+                <option value="Beneficiary" ${u.role === 'Beneficiary' ? 'selected' : ''}>Beneficiary</option>
+              </select>
+            </td>
+            <td style="text-align:right;">
+              <div class="btn-group" style="justify-content:flex-end;">
+                <button class="btn btn-sm btn-secondary" onclick="openResetPassword(${u.id}, '${App.UI.escapeHtml(u.name)}')" title="Reset Password">
+                  <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0110 0v4"></path></svg>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})" title="Delete User" ${isSelf || isAdmin ? 'disabled' : ''}>
+                  <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg>
+                </button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('');
+
+        // Attach role change handlers
+        tbody.querySelectorAll('.user-role-select').forEach(select => {
+          select.addEventListener('change', async (e) => {
+            const userId = parseInt(e.target.dataset.userId, 10);
+            const newRole = e.target.value;
+            const result = await App.Auth.updateUserRole(userId, newRole);
+            if (result.success) {
+              showMessage('addUserMessage', 'Role updated successfully.', 'success');
+              renderUsers();
+            } else {
+              showMessage('addUserMessage', result.message, 'danger');
+              renderUsers();
+            }
+          });
+        });
+      }
+
+      window.deleteUser = async function(userId) {
+        if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+        const result = await App.Auth.deleteUser(userId);
+        if (result.success) {
+          showMessage('addUserMessage', result.message, 'success');
+          renderUsers();
+        } else {
+          showMessage('addUserMessage', result.message, 'danger');
+        }
+      };
+
+      window.openResetPassword = function(userId, userName) {
+        pendingResetUserId = userId;
+        document.getElementById('resetPasswordUserName').textContent = userName;
+        document.getElementById('resetPasswordInput').value = '';
+        document.getElementById('resetPasswordConfirm').value = '';
+        document.getElementById('resetPasswordMessage').innerHTML = '';
+        App.UI.openModal('resetPasswordModal');
+      };
+
+      document.getElementById('resetPasswordConfirmBtn').addEventListener('click', async () => {
+        if (!pendingResetUserId) return;
+        const password = document.getElementById('resetPasswordInput').value;
+        const confirm = document.getElementById('resetPasswordConfirm').value;
+        if (password !== confirm) {
+          showMessage('resetPasswordMessage', 'Passwords do not match.', 'danger');
+          return;
+        }
+        if (password.length < 6) {
+          showMessage('resetPasswordMessage', 'Password must be at least 6 characters.', 'danger');
+          return;
+        }
+        const result = await App.Auth.resetUserPassword(pendingResetUserId, password);
+        if (result.success) {
+          showMessage('resetPasswordMessage', 'Password reset successfully.', 'success');
+          setTimeout(() => {
+            App.UI.closeModal('resetPasswordModal');
+            pendingResetUserId = null;
+          }, 1500);
+        } else {
+          showMessage('resetPasswordMessage', result.message, 'danger');
+        }
+      });
+
+      document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('addUserName').value.trim();
+        const email = document.getElementById('addUserEmail').value.trim();
+        const username = document.getElementById('addUserUsername').value.trim();
+        const password = document.getElementById('addUserPassword').value;
+        const role = document.getElementById('addUserRole').value;
+        const result = await App.Auth.register(username, password, name, role, email);
+        if (result.success) {
+          showMessage('addUserMessage', result.message, 'success');
+          document.getElementById('addUserForm').reset();
+          renderUsers();
+        } else {
+          showMessage('addUserMessage', result.message, 'danger');
+        }
+      });
+
+      document.getElementById('exportUsersBtn').addEventListener('click', () => {
+        const users = App.Auth.getUsers();
+        const exportData = users.map(u => ({
+          Name: u.name,
+          Username: u.username,
+          Email: u.email,
+          Role: u.role,
+          ID: u.id
+        }));
+        App.Export.toCSV(exportData, 'estatepro-users.csv');
+      });
+
+      function showMessage(containerId, message, type) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.innerHTML = `<div class="alert alert-${type}">${App.UI.escapeHtml(message)}</div>`;
+        setTimeout(() => { container.innerHTML = ''; }, 5000);
+      }
+
+      renderUsers();
+    })();
+  </script>
+</body>
+</html>

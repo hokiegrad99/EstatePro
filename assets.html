@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EstatePro - Assets</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">EP</div>
+      <div class="sidebar-brand-text">EstatePro</div>
+    </div>
+    <nav class="sidebar-nav">
+      <ul>
+        <li><a href="dashboard.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Dashboard</a></li>
+        <li><a href="tasks.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Tasks</a></li>
+        <li><a href="executor.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Executor</a></li>
+        <li><a href="decedent.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Mom</a></li>
+        <li><a href="assets.html" class="active"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> Assets</a></li>
+        <li><a href="debts.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg> Debts</a></li>
+        <li><a href="cashflow.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> Cashflow</a></li>
+        <li><a href="heirs.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Heirs</a></li>
+        <li><a href="distributions.html" ><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg> Distributions</a></li>
+        <li><a href="users.html" ><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</a></li><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</a></li>
+      </ul>
+    </nav>
+    <div class="sidebar-footer">EstatePro v1.0<br>Client-side demo</div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="main">
+    <header class="header">
+      <div class="header-left">
+        <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle navigation menu" aria-expanded="false"><svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
+        <span class="page-title">Assets</span>
+      </div>
+      <div class="header-right">
+        <button class="btn-icon" id="darkModeToggle" title="Toggle Dark Mode" aria-label="Toggle Dark Mode"></button>
+        <div class="user-info">
+          <div class="user-avatar" id="userAvatar"></div>
+          <span id="userName"></span>
+        </div>
+        <button class="btn-icon" onclick="App.Auth.logout()" title="Logout"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg></button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="print-only print-header">
+        <h2>EstatePro - Assets Report</h2>
+        <p>Estate of Margaret Elizabeth Johnson</p>
+        <p>Generated: <span id="printDate"></span></p>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon blue"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg></div>
+          <div class="stat-label">Total Asset Value</div>
+          <div class="stat-value" id="totalAssets">$0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></div>
+          <div class="stat-label">Number of Assets</div>
+          <div class="stat-value" id="assetCount">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon cyan"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 118 2.83"></path><path d="M22 12A10 10 0 0012 2v10z"></path></svg></div>
+          <div class="stat-label">Top Category</div>
+          <div class="stat-value" id="topCategory" style="font-size:1.25rem;">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon yellow"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg></div>
+          <div class="stat-label">Largest Asset</div>
+          <div class="stat-value" id="largestAsset" style="font-size:1.25rem;">-</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> Asset Inventory</div>
+          <div class="btn-group">
+            <button class="btn btn-secondary btn-sm" onclick="exportAssetsCSV()"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> CSV</button>
+            <button class="btn btn-secondary btn-sm" onclick="App.Export.printPDF()"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg> PDF</button>
+            <button class="btn btn-primary btn-sm edit-only" onclick="openAssetModal()"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Asset</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="data-table" id="assetsTable">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Description</th>
+                  <th style="text-align:right">Value</th>
+                  <th>Ownership</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                  <th class="edit-only no-print">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Asset Modal -->
+  <div class="modal-overlay" id="assetModal" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="assetModalTitle">Add Asset</div>
+        <button class="modal-close" onclick="App.UI.closeModal('assetModal')" aria-label="Close dialog">&times;</button>
+      </div>
+      <form id="assetForm">
+        <div class="modal-body">
+          <input type="hidden" id="assetId">
+          <div class="form-group">
+            <label class="form-label" for="assetName">Asset Name</label>
+            <input type="text" id="assetName" class="form-input" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="assetCategory">Category</label>
+              <select id="assetCategory" class="form-select" required>
+                <option value="Real Estate">Real Estate</option>
+                <option value="Vehicle">Vehicle</option>
+                <option value="Bank Account">Bank Account</option>
+                <option value="Investment">Investment</option>
+                <option value="Retirement">Retirement</option>
+                <option value="Insurance">Insurance</option>
+                <option value="Personal Property">Personal Property</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="assetValue">Value ($)</label>
+              <input type="number" id="assetValue" class="form-input" step="0.01" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="assetDescription">Description</label>
+            <input type="text" id="assetDescription" class="form-input">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="assetDate">Date Acquired</label>
+              <input type="date" id="assetDate" class="form-input">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="assetOwnership">Ownership</label>
+              <select id="assetOwnership" class="form-select">
+                <option value="Sole">Sole</option>
+                <option value="Joint">Joint</option>
+                <option value="Tenants in Common">Tenants in Common</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="assetStatus">Status</label>
+              <select id="assetStatus" class="form-select">
+                <option value="Active">Active</option>
+                <option value="Sold">Sold</option>
+                <option value="Distributed">Distributed</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="assetNotes">Notes</label>
+            <textarea id="assetNotes" class="form-textarea" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.UI.closeModal('assetModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Asset</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    (function() {
+      const user = App.Auth.checkSession();
+      if (!user) return;
+      document.getElementById('userName').textContent = user.name;
+      document.getElementById('userAvatar').textContent = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+      document.getElementById('printDate').textContent = new Date().toLocaleDateString();
+
+      function renderAssets() {
+        const estate = App.Data.getEstate();
+        const assets = estate.assets || [];
+        const total = assets.reduce((s, a) => s + (parseFloat(a.value) || 0), 0);
+        document.getElementById('totalAssets').textContent = App.UI.formatCurrency(total);
+        document.getElementById('assetCount').textContent = assets.length;
+
+        // Top category
+        const cats = {};
+        assets.forEach(a => { cats[a.category] = (cats[a.category] || 0) + (parseFloat(a.value) || 0); });
+        const topCat = Object.entries(cats).sort((a, b) => b[1] - a[1])[0];
+        document.getElementById('topCategory').textContent = topCat ? topCat[0] : '-';
+
+        // Largest asset
+        const largest = assets.reduce((max, a) => (parseFloat(a.value) || 0) > (parseFloat(max.value) || 0) ? a : max, assets[0] || {});
+        document.getElementById('largestAsset').textContent = largest && largest.name ? largest.name.split(' ').slice(0, 3).join(' ') : '-';
+
+        const tbody = document.querySelector('#assetsTable tbody');
+        tbody.innerHTML = assets.map(a => {
+          const statusBadge = a.status === 'Active' ? 'badge-success' : a.status === 'Sold' ? 'badge-info' : a.status === 'Distributed' ? 'badge-warning' : 'badge-default';
+          return `<tr>
+            <td>${App.UI.escapeHtml(a.name)}</td>
+            <td><span class="badge badge-default">${a.category}</span></td>
+            <td>${App.UI.escapeHtml(a.description)}</td>
+            <td style="text-align:right; font-weight:600;">${App.UI.formatCurrency(a.value)}</td>
+            <td>${a.ownership}</td>
+            <td><span class="badge ${statusBadge}">${a.status}</span></td>
+            <td>${App.UI.escapeHtml(a.notes)}</td>
+            <td class="edit-only no-print">
+              <div class="btn-group">
+                <button class="btn btn-sm btn-secondary" onclick="editAsset(${a.id})"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
+                <button class="btn btn-sm btn-danger" onclick="deleteAsset(${a.id})"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg></button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('');
+        if (assets.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-secondary);">No assets found.</td></tr>';
+        }
+      }
+
+      window.openAssetModal = function(id) {
+        const estate = App.Data.getEstate();
+        document.getElementById('assetForm').reset();
+        document.getElementById('assetId').value = '';
+        document.getElementById('assetModalTitle').textContent = 'Add Asset';
+        if (id) {
+          const a = estate.assets.find(x => x.id === id);
+          if (a) {
+            document.getElementById('assetId').value = a.id;
+            document.getElementById('assetName').value = a.name;
+            document.getElementById('assetCategory').value = a.category;
+            document.getElementById('assetValue').value = a.value;
+            document.getElementById('assetDescription').value = a.description;
+            document.getElementById('assetDate').value = a.dateAcquired;
+            document.getElementById('assetOwnership').value = a.ownership;
+            document.getElementById('assetStatus').value = a.status;
+            document.getElementById('assetNotes').value = a.notes;
+            document.getElementById('assetModalTitle').textContent = 'Edit Asset';
+          }
+        }
+        App.UI.openModal('assetModal');
+      };
+
+      window.editAsset = function(id) { openAssetModal(id); };
+
+      window.deleteAsset = function(id) {
+        if (!confirm('Are you sure you want to delete this asset?')) return;
+        const estate = App.Data.getEstate();
+        estate.assets = estate.assets.filter(a => a.id !== id);
+        App.Data.saveEstate(estate);
+        renderAssets();
+      };
+
+      document.getElementById('assetForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const estate = App.Data.getEstate();
+        const id = document.getElementById('assetId').value;
+        const asset = {
+          id: id ? parseInt(id) : App.Data.getNextId(estate.assets),
+          name: document.getElementById('assetName').value,
+          category: document.getElementById('assetCategory').value,
+          value: parseFloat(document.getElementById('assetValue').value) || 0,
+          description: document.getElementById('assetDescription').value,
+          dateAcquired: document.getElementById('assetDate').value,
+          ownership: document.getElementById('assetOwnership').value,
+          status: document.getElementById('assetStatus').value,
+          notes: document.getElementById('assetNotes').value
+        };
+        if (id) {
+          const idx = estate.assets.findIndex(a => a.id === parseInt(id));
+          if (idx >= 0) estate.assets[idx] = asset;
+        } else {
+          estate.assets.push(asset);
+        }
+        App.Data.saveEstate(estate);
+        App.UI.closeModal('assetModal');
+        renderAssets();
+      });
+
+      window.exportAssetsCSV = function() {
+        const estate = App.Data.getEstate();
+        App.Export.toCSV(estate.assets, 'estate-assets.csv');
+      };
+
+      renderAssets();
+    })();
+  </script>
+</body>
+</html>

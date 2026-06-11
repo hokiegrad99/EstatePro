@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EstatePro - Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">EP</div>
+      <div class="sidebar-brand-text">EstatePro</div>
+    </div>
+    <nav class="sidebar-nav">
+      <ul>
+        <li><a href="dashboard.html" class="active"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Dashboard</a></li>
+        <li><a href="tasks.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Tasks</a></li>
+        <li><a href="executor.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Executor</a></li>
+        <li><a href="decedent.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Mom</a></li>
+        <li><a href="assets.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> Assets</a></li>
+        <li><a href="debts.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg> Debts</a></li>
+        <li><a href="cashflow.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> Cashflow</a></li>
+        <li><a href="heirs.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Heirs</a></li>
+        <li><a href="distributions.html" ><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg> Distributions</a></li>
+        <li><a href="users.html" ><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</a></li><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</a></li>
+      </ul>
+    </nav>
+    <div class="sidebar-footer">
+      EstatePro v1.0<br>Client-side demo
+    </div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Main Content -->
+  <div class="main">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle navigation menu" aria-expanded="false"><svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
+        <span class="page-title">Dashboard - Overview</span>
+      </div>
+      <div class="header-right">
+        <button class="btn-icon" id="darkModeToggle" title="Toggle Dark Mode" aria-label="Toggle Dark Mode"></button>
+        <div class="user-info">
+          <div class="user-avatar" id="userAvatar"></div>
+          <span id="userName"></span>
+        </div>
+        <button class="btn-icon" onclick="App.Auth.logout()" title="Logout"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg></button>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div class="content">
+      <!-- Print Header -->
+      <div class="print-only print-header">
+        <h2>EstatePro - Estate Overview Report</h2>
+        <p>Estate of Margaret Elizabeth Johnson ("Mom")</p>
+        <p>Generated: <span id="printDate"></span></p>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon blue"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg></div>
+          <div class="stat-label">Total Assets</div>
+          <div class="stat-value" id="totalAssets">$0</div>
+          <div class="stat-change positive">Across <span id="assetCount">0</span> items</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon red"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg></div>
+          <div class="stat-label">Total Debts</div>
+          <div class="stat-value" id="totalDebts">$0</div>
+          <div class="stat-change negative">From <span id="debtCount">0</span> creditors</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg></div>
+          <div class="stat-label">Net Estate Value</div>
+          <div class="stat-value" id="netValue">$0</div>
+          <div class="stat-change positive">Est. for distribution</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon cyan"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg></div>
+          <div class="stat-label">Tasks Progress</div>
+          <div class="stat-value" id="taskProgress">0%</div>
+          <div class="progress-bar" style="margin-top:0.5rem;">
+            <div class="progress-bar-fill" id="taskProgressBar" style="width:0%"></div>
+          </div>
+          <div class="stat-change" style="margin-top:0.25rem; font-size:0.75rem;"><span id="completedTasks">0</span> of <span id="totalTasks">0</span> completed</div>
+        </div>
+      </div>
+
+      <!-- Two Column Layout -->
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem;">
+        <!-- Recent Cashflow -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> Recent Cashflow</div>
+            <div class="btn-group">
+              <a href="cashflow.html" class="btn btn-sm btn-secondary">View All</a>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-responsive">
+              <table class="data-table" id="recentCashflowTable">
+                <thead>
+                  <tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pending Tasks -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Pending Tasks</div>
+            <div class="btn-group">
+              <a href="tasks.html" class="btn btn-sm btn-secondary">View All</a>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-responsive">
+              <table class="data-table" id="pendingTasksTable">
+                <thead>
+                  <tr><th>Task</th><th>Due Date</th><th>Priority</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Estate Summary -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Estate Summary</div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size:0.9rem;">
+              <div><strong style="color:var(--text-secondary);">Decedent:</strong><br><span id="summaryDecedent">-</span></div>
+              <div><strong style="color:var(--text-secondary);">Date of Death:</strong><br><span id="summaryDateOfDeath">-</span></div>
+              <div><strong style="color:var(--text-secondary);">Executor:</strong><br><span id="summaryExecutor">-</span></div>
+              <div><strong style="color:var(--text-secondary);">Case Number:</strong><br><span id="summaryCaseNumber">-</span></div>
+              <div><strong style="color:var(--text-secondary);">Court:</strong><br><span id="summaryCourt">-</span></div>
+              <div><strong style="color:var(--text-secondary);">State:</strong><br><span id="summaryState">-</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Heirs Overview -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Heirs Overview</div>
+            <div class="btn-group">
+              <a href="heirs.html" class="btn btn-sm btn-secondary">View All</a>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-responsive">
+              <table class="data-table" id="heirsOverviewTable">
+                <thead>
+                  <tr><th>Name</th><th>Relationship</th><th style="text-align:right">Share</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Export Actions -->
+      <div class="card" style="margin-top:1.5rem;">
+        <div class="card-header">
+          <div class="card-title"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Export Reports</div>
+        </div>
+        <div class="card-body">
+          <div class="btn-group">
+            <button class="btn btn-secondary" onclick="exportDashboardCSV()"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Export Dashboard CSV</button>
+            <button class="btn btn-secondary" onclick="App.Export.printPDF()"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg> Print / Save PDF</button>
+          </div>
+          <p style="margin-top:0.75rem; font-size:0.85rem; color:var(--text-secondary);">
+            Export a summary of the estate data for your records or to share with the probate court.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    (function() {
+      // Auth check
+      const user = App.Auth.checkSession();
+      if (!user) return;
+      document.getElementById('userName').textContent = user.name;
+      document.getElementById('userAvatar').textContent = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+      function renderStats() {
+        const estate = App.Data.getEstate();
+        const assets = estate.assets || [];
+        const debts = estate.debts || [];
+        const totalAssets = assets.reduce((sum, a) => sum + (parseFloat(a.value) || 0), 0);
+        const totalDebts = debts.filter(d => d.status !== 'Paid').reduce((sum, d) => sum + (parseFloat(d.balance) || 0), 0);
+        const netValue = totalAssets - totalDebts;
+        document.getElementById('totalAssets').textContent = App.UI.formatCurrency(totalAssets);
+        document.getElementById('assetCount').textContent = assets.length;
+        document.getElementById('totalDebts').textContent = App.UI.formatCurrency(totalDebts);
+        document.getElementById('debtCount').textContent = debts.filter(d => d.status !== 'Paid').length;
+        document.getElementById('netValue').textContent = App.UI.formatCurrency(netValue);
+      }
+
+      function renderTaskProgress() {
+        const estate = App.Data.getEstate();
+        const tasks = estate.tasks || [];
+        const completedTasks = tasks.filter(t => t.status === 'Completed').length;
+        const totalTasks = tasks.length;
+        const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+        document.getElementById('taskProgress').textContent = progress + '%';
+        document.getElementById('taskProgressBar').style.width = progress + '%';
+        document.getElementById('completedTasks').textContent = completedTasks;
+        document.getElementById('totalTasks').textContent = totalTasks;
+      }
+
+      function renderRecentCashflow() {
+        const estate = App.Data.getEstate();
+        const cashflow = estate.cashflow || [];
+        const recentCashflow = [...cashflow].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+        const cashflowTbody = document.querySelector('#recentCashflowTable tbody');
+        cashflowTbody.innerHTML = recentCashflow.map(t => {
+          const amountClass = t.type === 'Income' ? 'positive' : 'negative';
+          const sign = t.type === 'Income' ? '+' : '-';
+          return `<tr>
+            <td>${App.UI.formatDate(t.date)}</td>
+            <td>${App.UI.escapeHtml(t.description)}</td>
+            <td style="text-align:right;" class="${amountClass}">${sign}${App.UI.formatCurrency(t.amount)}</td>
+          </tr>`;
+        }).join('');
+      }
+
+      function renderPendingTasks() {
+        const estate = App.Data.getEstate();
+        const tasks = estate.tasks || [];
+        const pendingTasks = tasks.filter(t => t.status !== 'Completed').slice(0, 5);
+        const tasksTbody = document.querySelector('#pendingTasksTable tbody');
+        tasksTbody.innerHTML = pendingTasks.map(t => {
+          const priorityBadge = t.priority === 'High' ? 'badge-danger' : t.priority === 'Medium' ? 'badge-warning' : 'badge-default';
+          return `<tr>
+            <td>${App.UI.escapeHtml(t.title)}</td>
+            <td>${App.UI.formatDate(t.dueDate)}</td>
+            <td><span class="badge ${priorityBadge}">${t.priority}</span></td>
+          </tr>`;
+        }).join('');
+        if (pendingTasks.length === 0) {
+          tasksTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-secondary);">All tasks completed!</td></tr>';
+        }
+      }
+
+      function renderHeirsOverview() {
+        const estate = App.Data.getEstate();
+        const heirs = estate.heirs || [];
+        const heirsTbody = document.querySelector('#heirsOverviewTable tbody');
+        heirsTbody.innerHTML = heirs.filter(h => h.share > 0).map(h => `<tr>
+          <td>${App.UI.escapeHtml(h.name)}</td>
+          <td>${App.UI.escapeHtml(h.relationship)}</td>
+          <td style="text-align:right;">${h.share}%</td>
+        </tr>`).join('');
+      }
+
+      function renderEstateSummary() {
+        const estate = App.Data.getEstate();
+        const d = estate.decedent || {};
+        const e = estate.executor || {};
+        document.getElementById('summaryDecedent').textContent = d.fullName || d.name || '-';
+        document.getElementById('summaryDateOfDeath').textContent = App.UI.formatDate(d.dateOfDeath) || '-';
+        document.getElementById('summaryExecutor').textContent = e.name || '-';
+        document.getElementById('summaryCaseNumber').textContent = e.caseNumber || '-';
+        document.getElementById('summaryCourt').textContent = e.courtName || '-';
+        document.getElementById('summaryState').textContent = d.stateOfResidence || '-';
+      }
+
+      function renderAll() {
+        renderStats();
+        renderTaskProgress();
+        renderRecentCashflow();
+        renderPendingTasks();
+        renderHeirsOverview();
+        renderEstateSummary();
+        document.getElementById('printDate').textContent = new Date().toLocaleDateString();
+      }
+
+      renderAll();
+
+      // Re-render when page is restored from back-forward cache
+      window.addEventListener('pageshow', (event) => {
+        if (event.persisted) {
+          renderAll();
+        }
+      });
+    })();
+
+    function exportDashboardCSV() {
+      const estate = App.Data.getEstate();
+      const data = [
+        { Metric: 'Total Assets', Value: App.UI.formatCurrency(estate.assets.reduce((s, a) => s + (parseFloat(a.value) || 0), 0)) },
+        { Metric: 'Total Debts', Value: App.UI.formatCurrency(estate.debts.filter(d => d.status !== 'Paid').reduce((s, d) => s + (parseFloat(d.balance) || 0), 0)) },
+        { Metric: 'Net Estate Value', Value: App.UI.formatCurrency(estate.assets.reduce((s, a) => s + (parseFloat(a.value) || 0), 0) - estate.debts.filter(d => d.status !== 'Paid').reduce((s, d) => s + (parseFloat(d.balance) || 0), 0)) },
+        { Metric: 'Tasks Completed', Value: estate.tasks.filter(t => t.status === 'Completed').length + ' of ' + estate.tasks.length },
+        { Metric: 'Number of Assets', Value: estate.assets.length },
+        { Metric: 'Number of Debts', Value: estate.debts.length },
+        { Metric: 'Number of Heirs', Value: estate.heirs.length },
+        { Metric: 'Decedent', Value: estate.decedent.fullName },
+        { Metric: 'Executor', Value: estate.executor.name },
+        { Metric: 'Case Number', Value: estate.executor.caseNumber }
+      ];
+      App.Export.toCSV(data, 'estate-dashboard.csv');
+    }
+  </script>
+</body>
+</html>

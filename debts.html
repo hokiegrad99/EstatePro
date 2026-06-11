@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EstatePro - Debts</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">EP</div>
+      <div class="sidebar-brand-text">EstatePro</div>
+    </div>
+    <nav class="sidebar-nav">
+      <ul>
+        <li><a href="dashboard.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Dashboard</a></li>
+        <li><a href="tasks.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Tasks</a></li>
+        <li><a href="executor.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Executor</a></li>
+        <li><a href="decedent.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Mom</a></li>
+        <li><a href="assets.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> Assets</a></li>
+        <li><a href="debts.html" class="active"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg> Debts</a></li>
+        <li><a href="cashflow.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> Cashflow</a></li>
+        <li><a href="heirs.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Heirs</a></li>
+        <li><a href="distributions.html" ><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg> Distributions</a></li>
+        <li><a href="users.html" ><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</a></li><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</a></li>
+      </ul>
+    </nav>
+    <div class="sidebar-footer">EstatePro v1.0<br>Client-side demo</div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="main">
+    <header class="header">
+      <div class="header-left">
+        <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle navigation menu" aria-expanded="false"><svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
+        <span class="page-title">Debts</span>
+      </div>
+      <div class="header-right">
+        <button class="btn-icon" id="darkModeToggle" title="Toggle Dark Mode" aria-label="Toggle Dark Mode"></button>
+        <div class="user-info">
+          <div class="user-avatar" id="userAvatar"></div>
+          <span id="userName"></span>
+        </div>
+        <button class="btn-icon" onclick="App.Auth.logout()" title="Logout"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg></button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="print-only print-header">
+        <h2>EstatePro - Debts Report</h2>
+        <p>Estate of Margaret Elizabeth Johnson</p>
+        <p>Generated: <span id="printDate"></span></p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon red"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg></div>
+          <div class="stat-label">Total Debt</div>
+          <div class="stat-value" id="totalDebt">$0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon yellow"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
+          <div class="stat-label">Active Debts</div>
+          <div class="stat-value" id="activeDebtCount">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+          <div class="stat-label">Paid Debts</div>
+          <div class="stat-value" id="paidDebtCount">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon cyan"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg></div>
+          <div class="stat-label">Highest Debt</div>
+          <div class="stat-value" id="highestDebt">$0</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg> Debt Inventory</div>
+          <div class="btn-group">
+            <button class="btn btn-secondary btn-sm" onclick="exportDebtsCSV()"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> CSV</button>
+            <button class="btn btn-secondary btn-sm" onclick="App.Export.printPDF()"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg> PDF</button>
+            <button class="btn btn-primary btn-sm edit-only" onclick="openDebtModal()"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Debt</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="data-table" id="debtsTable">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Creditor</th>
+                  <th style="text-align:right">Balance</th>
+                  <th>Interest Rate</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                  <th class="edit-only no-print">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="debtModal" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="debtModalTitle">Add Debt</div>
+        <button class="modal-close" onclick="App.UI.closeModal('debtModal')" aria-label="Close dialog">&times;</button>
+      </div>
+      <form id="debtForm">
+        <div class="modal-body">
+          <input type="hidden" id="debtId">
+          <div class="form-group">
+            <label class="form-label" for="debtName">Debt Name</label>
+            <input type="text" id="debtName" class="form-input" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="debtCategory">Category</label>
+              <select id="debtCategory" class="form-select" required>
+                <option value="Credit Card">Credit Card</option>
+                <option value="Medical">Medical</option>
+                <option value="Funeral">Funeral</option>
+                <option value="Utility">Utility</option>
+                <option value="Legal">Legal</option>
+                <option value="Tax">Tax</option>
+                <option value="Mortgage">Mortgage</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="debtCreditor">Creditor</label>
+              <input type="text" id="debtCreditor" class="form-input" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="debtBalance">Balance ($)</label>
+              <input type="number" id="debtBalance" class="form-input" step="0.01" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="debtRate">Interest Rate (%)</label>
+              <input type="number" id="debtRate" class="form-input" step="0.01">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="debtMinPayment">Min Payment ($)</label>
+              <input type="number" id="debtMinPayment" class="form-input" step="0.01">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="debtStatus">Status</label>
+              <select id="debtStatus" class="form-select">
+                <option value="Active">Active</option>
+                <option value="Paid">Paid</option>
+                <option value="Pending">Pending</option>
+                <option value="Disputed">Disputed</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="debtNotes">Notes</label>
+            <textarea id="debtNotes" class="form-textarea" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.UI.closeModal('debtModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Debt</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    (function() {
+      const user = App.Auth.checkSession();
+      if (!user) return;
+      document.getElementById('userName').textContent = user.name;
+      document.getElementById('userAvatar').textContent = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+      document.getElementById('printDate').textContent = new Date().toLocaleDateString();
+
+      function renderDebts() {
+        const estate = App.Data.getEstate();
+        const debts = estate.debts || [];
+        const active = debts.filter(d => d.status === 'Active');
+        const paid = debts.filter(d => d.status === 'Paid');
+        const totalActive = active.reduce((s, d) => s + (parseFloat(d.balance) || 0), 0);
+        const highest = debts.reduce((max, d) => (parseFloat(d.balance) || 0) > (parseFloat(max.balance) || 0) ? d : max, debts[0] || {});
+
+        document.getElementById('totalDebt').textContent = App.UI.formatCurrency(totalActive);
+        document.getElementById('activeDebtCount').textContent = active.length;
+        document.getElementById('paidDebtCount').textContent = paid.length;
+        document.getElementById('highestDebt').textContent = highest && highest.name ? App.UI.formatCurrency(highest.balance) : '$0.00';
+
+        const tbody = document.querySelector('#debtsTable tbody');
+        tbody.innerHTML = debts.map(d => {
+          const statusBadge = d.status === 'Paid' ? 'badge-success' : d.status === 'Active' ? 'badge-danger' : d.status === 'Disputed' ? 'badge-warning' : 'badge-default';
+          return `<tr>
+            <td>${App.UI.escapeHtml(d.name)}</td>
+            <td><span class="badge badge-default">${d.category}</span></td>
+            <td>${App.UI.escapeHtml(d.creditor)}</td>
+            <td style="text-align:right; font-weight:600;">${App.UI.formatCurrency(d.balance)}</td>
+            <td>${d.interestRate ? d.interestRate + '%' : '-'}</td>
+            <td><span class="badge ${statusBadge}">${d.status}</span></td>
+            <td>${App.UI.escapeHtml(d.notes)}</td>
+            <td class="edit-only no-print">
+              <div class="btn-group">
+                <button class="btn btn-sm btn-secondary" onclick="editDebt(${d.id})"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
+                <button class="btn btn-sm btn-danger" onclick="deleteDebt(${d.id})"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg></button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('');
+        if (debts.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-secondary);">No debts found.</td></tr>';
+        }
+      }
+
+      window.openDebtModal = function(id) {
+        const estate = App.Data.getEstate();
+        document.getElementById('debtForm').reset();
+        document.getElementById('debtId').value = '';
+        document.getElementById('debtModalTitle').textContent = 'Add Debt';
+        if (id) {
+          const d = estate.debts.find(x => x.id === id);
+          if (d) {
+            document.getElementById('debtId').value = d.id;
+            document.getElementById('debtName').value = d.name;
+            document.getElementById('debtCategory').value = d.category;
+            document.getElementById('debtCreditor').value = d.creditor;
+            document.getElementById('debtBalance').value = d.balance;
+            document.getElementById('debtRate').value = d.interestRate;
+            document.getElementById('debtMinPayment').value = d.minPayment;
+            document.getElementById('debtStatus').value = d.status;
+            document.getElementById('debtNotes').value = d.notes;
+            document.getElementById('debtModalTitle').textContent = 'Edit Debt';
+          }
+        }
+        App.UI.openModal('debtModal');
+      };
+
+      window.editDebt = function(id) { openDebtModal(id); };
+
+      window.deleteDebt = function(id) {
+        if (!confirm('Are you sure you want to delete this debt?')) return;
+        const estate = App.Data.getEstate();
+        estate.debts = estate.debts.filter(d => d.id !== id);
+        App.Data.saveEstate(estate);
+        renderDebts();
+      };
+
+      document.getElementById('debtForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const estate = App.Data.getEstate();
+        const id = document.getElementById('debtId').value;
+        const debt = {
+          id: id ? parseInt(id) : App.Data.getNextId(estate.debts),
+          name: document.getElementById('debtName').value,
+          category: document.getElementById('debtCategory').value,
+          creditor: document.getElementById('debtCreditor').value,
+          balance: parseFloat(document.getElementById('debtBalance').value) || 0,
+          interestRate: parseFloat(document.getElementById('debtRate').value) || 0,
+          minPayment: parseFloat(document.getElementById('debtMinPayment').value) || 0,
+          status: document.getElementById('debtStatus').value,
+          notes: document.getElementById('debtNotes').value
+        };
+        if (id) {
+          const idx = estate.debts.findIndex(d => d.id === parseInt(id));
+          if (idx >= 0) estate.debts[idx] = debt;
+        } else {
+          estate.debts.push(debt);
+        }
+        App.Data.saveEstate(estate);
+        App.UI.closeModal('debtModal');
+        renderDebts();
+      });
+
+      window.exportDebtsCSV = function() {
+        const estate = App.Data.getEstate();
+        App.Export.toCSV(estate.debts, 'estate-debts.csv');
+      };
+
+      renderDebts();
+    })();
+  </script>
+</body>
+</html>
