@@ -10,10 +10,50 @@ const App = {
   Auth: {
     async hashPassword(password) {
       const encoder = new TextEncoder();
-      const data = encoder.encode(password);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw', encoder.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']
+      );
+      const derived = await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+        keyMaterial, 256
+      );
+      const saltB64 = App.Crypto._arrayBufferToBase64(salt);
+      const hashB64 = App.Crypto._arrayBufferToBase64(derived);
+      return `$pbkdf2$SHA-256$100000$${saltB64}$${hashB64}`;
+    },
+
+    async verifyPassword(password, storedHash) {
+      if (!storedHash) return { valid: false };
+      // Legacy SHA-256 hash (64 hex chars, no prefix)
+      if (/^[0-9a-f]{64}$/i.test(storedHash)) {
+        const encoder = new TextEncoder();
+        const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(password));
+        const hashHex = Array.from(new Uint8Array(hashBuffer))
+          .map(b => b.toString(16).padStart(2, '0')).join('');
+        return { valid: hashHex === storedHash.toLowerCase(), legacy: true };
+      }
+      // PBKDF2 hash
+      if (storedHash.startsWith('$pbkdf2$')) {
+        const parts = storedHash.split('$');
+        if (parts.length !== 6) return { valid: false };
+        const algo = parts[2];
+        const iterations = parseInt(parts[3], 10);
+        if (isNaN(iterations) || iterations < 1) return { valid: false };
+        const salt = App.Crypto._base64ToArrayBuffer(parts[4]);
+        const expectedHash = parts[5];
+        const encoder = new TextEncoder();
+        const keyMaterial = await crypto.subtle.importKey(
+          'raw', encoder.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']
+        );
+        const derived = await crypto.subtle.deriveBits(
+          { name: 'PBKDF2', salt, iterations, hash: algo },
+          keyMaterial, 256
+        );
+        const derivedB64 = App.Crypto._arrayBufferToBase64(derived);
+        return { valid: derivedB64 === expectedHash, legacy: false };
+      }
+      return { valid: false };
     },
 
     async init() {
@@ -78,10 +118,18 @@ const App = {
 
     async login(username, password) {
       const users = this.getUsers();
-      const hashedPassword = await this.hashPassword(password);
-      const user = users.find(u => u.username === username && u.password === hashedPassword);
+      const user = users.find(u => u.username === username);
       if (!user) {
         return { success: false, message: 'Invalid username or password.' };
+      }
+      const verify = await this.verifyPassword(password, user.password);
+      if (!verify.valid) {
+        return { success: false, message: 'Invalid username or password.' };
+      }
+      // Migrate legacy SHA-256 hash to PBKDF2 on successful login
+      if (verify.legacy) {
+        user.password = await this.hashPassword(password);
+        await this.saveUsers(users);
       }
       const session = { id: user.id, username: user.username, name: user.name, role: user.role, email: user.email };
       localStorage.setItem('estatepro_session', JSON.stringify(session));
@@ -220,8 +268,8 @@ const App = {
       if (!user) {
         return { success: false, message: 'User not found.' };
       }
-      const hashedCurrent = await this.hashPassword(currentPassword);
-      if (user.password !== hashedCurrent) {
+      const verify = await this.verifyPassword(currentPassword, user.password);
+      if (!verify.valid) {
         return { success: false, message: 'Current password is incorrect.' };
       }
       const hashedNew = await this.hashPassword(newPassword);
@@ -719,6 +767,13 @@ const App = {
     getNextId(array) {
       if (!array || array.length === 0) return 1;
       return Math.max(...array.map(item => item.id || 0)) + 1;
+    },
+
+    async clearAllEstateData() {
+      const empty = this.getEmptyEstate();
+      this._cache = empty;
+      await App.Crypto.writeStorage('estatepro_estate', empty);
+      return { success: true, message: 'All estate data has been cleared. The estate is now empty.' };
     }
   },
 
@@ -881,7 +936,7 @@ const App = {
       return { valid: false, error: 'Unrecognized data format' };
     },
 
-    async importFromFile(file) {
+    async importFromFile(file, passphrase) {
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = async (e) => {
@@ -889,13 +944,13 @@ const App = {
             let json = JSON.parse(e.target.result);
             // Check if it's an encrypted backup envelope
             if (json && json.ct && json.algo) {
-              const passphrase = App.Crypto.getPassphrase();
-              if (!passphrase) {
-                resolve({ success: false, message: 'This backup is encrypted. Please enter your passphrase first (via the Security tab in Sync & Share).' });
+              const availablePassphrase = passphrase || App.Crypto.getPassphrase();
+              if (!availablePassphrase) {
+                resolve({ success: false, needsPassphrase: true, message: 'This backup is encrypted. Please enter the passphrase used when the backup was created.' });
                 return;
               }
               try {
-                const decrypted = await App.Crypto.decrypt(json, passphrase);
+                const decrypted = await App.Crypto.decrypt(json, availablePassphrase);
                 json = JSON.parse(decrypted);
               } catch (err) {
                 resolve({ success: false, message: 'Failed to decrypt backup: ' + err.message });
@@ -973,7 +1028,7 @@ const App = {
       localStorage.setItem('estatepro_last_sync', new Date().toISOString());
     },
 
-    async loadFromGist(token, gistId) {
+    async loadFromGist(token, gistId, passphrase) {
       const response = await fetch(`https://api.github.com/gists/${gistId}`, {
         method: 'GET',
         headers: {
@@ -994,16 +1049,19 @@ const App = {
       try {
         const parsed = JSON.parse(file.content);
         if (parsed && parsed.ct && parsed.algo) {
-          const passphrase = App.Crypto.getPassphrase();
-          if (!passphrase) {
-            throw new Error('This Gist backup is encrypted. Please enter your passphrase first.');
+          const availablePassphrase = passphrase || App.Crypto.getPassphrase();
+          if (!availablePassphrase) {
+            const needsPassphraseError = new Error('This Gist backup is encrypted. Please enter the passphrase used when the backup was created.');
+            needsPassphraseError.needsPassphrase = true;
+            throw needsPassphraseError;
           }
-          const decrypted = await App.Crypto.decrypt(parsed, passphrase);
+          const decrypted = await App.Crypto.decrypt(parsed, availablePassphrase);
           data = JSON.parse(decrypted);
         } else {
           data = parsed;
         }
       } catch (e) {
+        if (e.needsPassphrase) throw e;
         throw new Error('Invalid backup data: ' + e.message);
       }
       return { gist: gist, data: data };
@@ -1279,6 +1337,67 @@ const App = {
       };
     },
 
+    // Passphrase prompt for importing encrypted backups (no local verification needed)
+    renderImportPassphraseModal() {
+      if (document.getElementById('importPassphraseModal')) return;
+      const modal = document.createElement('div');
+      modal.id = 'importPassphraseModal';
+      modal.className = 'modal-overlay active';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.innerHTML = `
+        <div class="modal" style="max-width:400px;">
+          <div class="modal-header">
+            <div class="modal-title">Enter Backup Passphrase</div>
+          </div>
+          <div class="modal-body">
+            <p style="margin-bottom:1rem; color:var(--text-secondary); font-size:0.9rem;">
+              This backup is encrypted. Please enter the passphrase that was used when the backup was created.
+            </p>
+            <form id="importPassphraseForm">
+              <div class="form-group">
+                <label class="form-label" for="importPassphraseInput">Passphrase</label>
+                <input type="password" id="importPassphraseInput" class="form-input" placeholder="Enter backup passphrase" required>
+              </div>
+              <div class="btn-group">
+                <button type="submit" class="btn btn-primary">Unlock Backup</button>
+                <button type="button" class="btn btn-secondary" id="importPassphraseCancel">Cancel</button>
+              </div>
+            </form>
+            <div id="importPassphraseError" style="margin-top:1rem;"></div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    },
+
+    showImportPassphraseModal(onSubmit) {
+      this.renderImportPassphraseModal();
+      const form = document.getElementById('importPassphraseForm');
+      const error = document.getElementById('importPassphraseError');
+      const cancelBtn = document.getElementById('importPassphraseCancel');
+      const submitBtn = form.querySelector('button[type="submit"]');
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const passphrase = document.getElementById('importPassphraseInput').value;
+        if (!passphrase) return;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Unlocking...';
+        try {
+          if (onSubmit) await onSubmit(passphrase);
+          this.closeModal('importPassphraseModal');
+        } catch (err) {
+          error.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(err.message || 'Failed to decrypt backup.') + '</div>';
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Unlock Backup';
+        }
+      };
+      cancelBtn.onclick = () => {
+        this.closeModal('importPassphraseModal');
+      };
+    },
+
     // User menu dropdown
     initUserMenu() {
       if (document.body.classList.contains('login-page')) return;
@@ -1310,6 +1429,10 @@ const App = {
           <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:0.5rem;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
           Promote to Admin
         </button>
+        <button type="button" class="user-menu-item" id="userMenuClearData" style="display:none; width:100%; text-align:left; padding:0.5rem 1rem; background:none; border:none; cursor:pointer; color:var(--danger-color); font-size:0.9rem;">
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:0.5rem;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg>
+          Clear All Estate Data
+        </button>
         <button type="button" class="user-menu-item" onclick="App.Auth.logout()" style="display:block; width:100%; text-align:left; padding:0.5rem 1rem; background:none; border:none; cursor:pointer; color:var(--text-primary); font-size:0.9rem;">
           <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:0.5rem;"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
           Logout
@@ -1326,8 +1449,17 @@ const App = {
       }
 
       const promoteBtn = dropdown.querySelector('#userMenuPromoteAdmin');
-      if (promoteBtn && currentUser && currentUser.role !== 'Admin') {
-        promoteBtn.style.display = 'block';
+      if (promoteBtn && currentUser && currentUser.role === 'Executor') {
+        const users = App.Auth.getUsers();
+        const hasAdmin = users.some(u => u.role === 'Admin');
+        if (!hasAdmin) {
+          promoteBtn.style.display = 'block';
+        }
+      }
+
+      const clearDataBtn = dropdown.querySelector('#userMenuClearData');
+      if (clearDataBtn && currentUser && currentUser.role === 'Admin') {
+        clearDataBtn.style.display = 'block';
       }
 
       const toggleDropdown = (e) => {
@@ -1366,6 +1498,22 @@ const App = {
           userInfo.setAttribute('aria-expanded', 'false');
           if (!confirm('Promote your account to Admin? This will give you full access to user management and all settings.')) return;
           const result = await App.Auth.promoteSelfToAdmin();
+          if (result.success) {
+            alert(result.message + ' The page will refresh to apply changes.');
+            window.location.reload();
+          } else {
+            alert(result.message);
+          }
+        });
+      }
+
+      if (clearDataBtn) {
+        clearDataBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          dropdown.style.display = 'none';
+          userInfo.setAttribute('aria-expanded', 'false');
+          if (!confirm('WARNING: This will permanently delete all estate data (assets, debts, tasks, cashflow, heirs, distributions).\n\nUser accounts and login sessions will NOT be affected.\n\nThis action cannot be undone. Are you sure?')) return;
+          const result = await App.Data.clearAllEstateData();
           if (result.success) {
             alert(result.message + ' The page will refresh to apply changes.');
             window.location.reload();
@@ -1630,6 +1778,23 @@ const App = {
                 </div>
               </div>
               <div id="securityStatus" class="sync-status"></div>
+
+              <div class="danger-zone" style="margin-top:2rem; padding:1rem; border:1px solid var(--danger-color); border-radius:var(--radius); background:rgba(239,68,68,0.05);">
+                <div style="font-weight:600; color:var(--danger-color); margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;">
+                  <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                  Danger Zone
+                </div>
+                <p style="margin-bottom:1rem; color:var(--text-secondary); font-size:0.85rem;">
+                  Admin-only actions that permanently affect estate data.
+                </p>
+                <button type="button" class="btn btn-danger" id="clearAllEstateDataBtn">
+                  <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg>
+                  Clear All Estate Data
+                </button>
+                <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.5rem;">
+                  This removes all estate data (assets, debts, tasks, cashflow, heirs, distributions). User accounts and sessions are preserved.
+                </div>
+              </div>
             </div>
 
             <div class="tab-panel" data-panel="gist">
@@ -1782,6 +1947,32 @@ const App = {
 
       // Initialize UI state
       updateSecurityUI();
+
+      const clearAllBtn = document.getElementById('clearAllEstateDataBtn');
+      if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', async () => {
+          const currentUser = App.Auth.getCurrentUser();
+          if (!currentUser || currentUser.role !== 'Admin') {
+            this.showSyncStatus('securityStatus', 'Only administrators can clear estate data.', 'danger');
+            return;
+          }
+          if (!confirm('WARNING: This will permanently delete all estate data (assets, debts, tasks, cashflow, heirs, distributions).\n\nUser accounts and login sessions will NOT be affected.\n\nThis action cannot be undone. Are you sure?')) {
+            return;
+          }
+          this.showSyncStatus('securityStatus', 'Clearing estate data...', 'info');
+          try {
+            const result = await App.Data.clearAllEstateData();
+            this.showSyncStatus('securityStatus', result.message, result.success ? 'success' : 'danger');
+            if (result.success) {
+              setTimeout(() => {
+                window.location.reload();
+              }, 2000);
+            }
+          } catch (err) {
+            this.showSyncStatus('securityStatus', 'Clear failed: ' + err.message, 'danger');
+          }
+        });
+      }
     },
 
     initExportHandlers() {
@@ -1812,33 +2003,62 @@ const App = {
       const importStatus = document.getElementById('syncImportStatus');
 
       let pendingImport = null;
+      let pendingFile = null;
 
-      const handleImportFile = async (file) => {
+      const showImportPreview = (validation) => {
+        const v = validation;
+        const estate = v.data.estate;
+        const netValue = (estate.assets || []).reduce((s, a) => s + (parseFloat(a.value) || 0), 0) - (estate.debts || []).filter(d => d.status !== 'Paid').reduce((s, d) => s + (parseFloat(d.balance) || 0), 0);
+        if (importPreview) importPreview.style.display = 'block';
+        importPreview.innerHTML = `
+          <div class="sync-preview-header">Preview of imported data:</div>
+          <div class="sync-preview-grid">
+            <div><strong>Version:</strong> ${v.data.version || 'N/A'}</div>
+            <div><strong>Exported:</strong> ${v.data.exportedAt ? App.UI.formatDate(v.data.exportedAt.split('T')[0]) : 'N/A'}</div>
+            <div><strong>Assets:</strong> ${(estate.assets || []).length}</div>
+            <div><strong>Debts:</strong> ${(estate.debts || []).length}</div>
+            <div><strong>Tasks:</strong> ${(estate.tasks || []).length}</div>
+            <div><strong>Heirs:</strong> ${(estate.heirs || []).length}</div>
+            <div><strong>Users:</strong> ${v.hasUsers ? (v.data.users || []).length : 'None'}</div>
+            <div><strong>Net Value:</strong> ${App.UI.formatCurrency(netValue)}</div>
+          </div>
+        `;
+        if (importConfirm) importConfirm.disabled = false;
+        this.showSyncStatus('syncImportStatus', 'File validated. Review the preview and click Confirm Import.', 'success');
+      };
+
+      const handleImportFile = async (file, passphrase) => {
         this.showSyncStatus('syncImportStatus', 'Reading file...', 'info');
-        const result = await App.Sync.importFromFile(file);
+        const result = await App.Sync.importFromFile(file, passphrase);
         if (result.success) {
           pendingImport = result.validation;
-          if (importPreview) importPreview.style.display = 'block';
-          const v = result.validation;
-          const estate = v.data.estate;
-          const netValue = (estate.assets || []).reduce((s, a) => s + (parseFloat(a.value) || 0), 0) - (estate.debts || []).filter(d => d.status !== 'Paid').reduce((s, d) => s + (parseFloat(d.balance) || 0), 0);
-          importPreview.innerHTML = `
-            <div class="sync-preview-header">Preview of imported data:</div>
-            <div class="sync-preview-grid">
-              <div><strong>Version:</strong> ${v.data.version || 'N/A'}</div>
-              <div><strong>Exported:</strong> ${v.data.exportedAt ? App.UI.formatDate(v.data.exportedAt.split('T')[0]) : 'N/A'}</div>
-              <div><strong>Assets:</strong> ${(estate.assets || []).length}</div>
-              <div><strong>Debts:</strong> ${(estate.debts || []).length}</div>
-              <div><strong>Tasks:</strong> ${(estate.tasks || []).length}</div>
-              <div><strong>Heirs:</strong> ${(estate.heirs || []).length}</div>
-              <div><strong>Users:</strong> ${v.hasUsers ? (v.data.users || []).length : 'None'}</div>
-              <div><strong>Net Value:</strong> ${App.UI.formatCurrency(netValue)}</div>
-            </div>
-          `;
-          if (importConfirm) importConfirm.disabled = false;
-          this.showSyncStatus('syncImportStatus', 'File validated. Review the preview and click Confirm Import.', 'success');
+          showImportPreview(result.validation);
+        } else if (result.needsPassphrase) {
+          pendingFile = file;
+          this.showImportPassphraseModal(async (enteredPassphrase) => {
+            this.showSyncStatus('syncImportStatus', 'Decrypting backup...', 'info');
+            const retryResult = await App.Sync.importFromFile(pendingFile, enteredPassphrase);
+            if (retryResult.success) {
+              pendingImport = retryResult.validation;
+              showImportPreview(retryResult.validation);
+              // If this device doesn't have encryption enabled, set it up with the same passphrase
+              if (!App.Crypto.isEncryptionEnabled()) {
+                await App.Crypto.setupEncryption(enteredPassphrase);
+              } else {
+                await App.Crypto.setPassphrase(enteredPassphrase);
+                App.Crypto.savePassphraseToSession();
+              }
+            } else {
+              pendingImport = null;
+              pendingFile = null;
+              if (importPreview) importPreview.style.display = 'none';
+              if (importConfirm) importConfirm.disabled = true;
+              this.showSyncStatus('syncImportStatus', retryResult.message, 'danger');
+            }
+          });
         } else {
           pendingImport = null;
+          pendingFile = null;
           if (importPreview) importPreview.style.display = 'none';
           if (importConfirm) importConfirm.disabled = true;
           this.showSyncStatus('syncImportStatus', result.message, 'danger');
@@ -1891,10 +2111,12 @@ const App = {
       if (importCancel) {
         importCancel.addEventListener('click', () => {
           pendingImport = null;
+          pendingFile = null;
           if (importPreview) importPreview.style.display = 'none';
           if (importConfirm) importConfirm.disabled = true;
           if (fileInput) fileInput.value = '';
           if (importStatus) importStatus.innerHTML = '';
+          this.closeModal('syncModal');
         });
       }
     },
@@ -1966,7 +2188,36 @@ const App = {
               setTimeout(() => window.location.reload(), 2000);
             }
           } catch (err) {
-            this.showSyncStatus('gistStatus', err.message, 'danger');
+            if (err.needsPassphrase) {
+              this.showImportPassphraseModal(async (enteredPassphrase) => {
+                this.showSyncStatus('gistStatus', 'Decrypting Gist backup...', 'info');
+                try {
+                  const result = await App.Gist.loadFromGist(token, id, enteredPassphrase);
+                  const validation = App.Sync.validateImportData(result.data);
+                  if (!validation.valid) {
+                    this.showSyncStatus('gistStatus', validation.error, 'danger');
+                    return;
+                  }
+                  App.Gist.saveConfig({ token, gistId: id });
+                  App.Gist.saveLastSyncTime();
+                  const importResult = App.Sync.applyImport(validation, { includeUsers: true });
+                  this.showSyncStatus('gistStatus', importResult.message, importResult.success ? 'success' : 'danger');
+                  if (importResult.success) {
+                    if (!App.Crypto.isEncryptionEnabled()) {
+                      await App.Crypto.setupEncryption(enteredPassphrase);
+                    } else {
+                      await App.Crypto.setPassphrase(enteredPassphrase);
+                      App.Crypto.savePassphraseToSession();
+                    }
+                    setTimeout(() => window.location.reload(), 2000);
+                  }
+                } catch (retryErr) {
+                  this.showSyncStatus('gistStatus', retryErr.message, 'danger');
+                }
+              });
+            } else {
+              this.showSyncStatus('gistStatus', err.message, 'danger');
+            }
           }
         });
       }
