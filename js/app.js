@@ -9,6 +9,10 @@ const App = {
      ============================ */
   Auth: {
     async hashPassword(password) {
+      if (!App.Crypto._hasSubtle()) {
+        const hash = await App.Crypto._sha256Fallback(password);
+        return `$fallback$SHA-256$${hash}`;
+      }
       const encoder = new TextEncoder();
       const salt = crypto.getRandomValues(new Uint8Array(16));
       const keyMaterial = await crypto.subtle.importKey(
@@ -27,11 +31,24 @@ const App = {
       if (!storedHash) return { valid: false };
       // Legacy SHA-256 hash (64 hex chars, no prefix)
       if (/^[0-9a-f]{64}$/i.test(storedHash)) {
-        const encoder = new TextEncoder();
-        const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(password));
-        const hashHex = Array.from(new Uint8Array(hashBuffer))
-          .map(b => b.toString(16).padStart(2, '0')).join('');
+        let hashHex;
+        if (App.Crypto._hasSubtle()) {
+          const encoder = new TextEncoder();
+          const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(password));
+          hashHex = Array.from(new Uint8Array(hashBuffer))
+            .map(b => b.toString(16).padStart(2, '0')).join('');
+        } else {
+          hashHex = await App.Crypto._sha256Fallback(password);
+        }
         return { valid: hashHex === storedHash.toLowerCase(), legacy: true };
+      }
+      // Fallback hash (when crypto.subtle is unavailable)
+      if (storedHash.startsWith('$fallback$')) {
+        const parts = storedHash.split('$');
+        if (parts.length !== 3) return { valid: false };
+        const expectedHash = parts[2];
+        const hash = await App.Crypto._sha256Fallback(password);
+        return { valid: hash === expectedHash, legacy: false, fallback: true };
       }
       // PBKDF2 hash
       if (storedHash.startsWith('$pbkdf2$')) {
@@ -60,22 +77,27 @@ const App = {
       if (App.Crypto.isEncryptionEnabled() && !App.Crypto.hasPassphrase()) {
         return;
       }
-      const users = await App.Crypto.readStorage('estatepro_users');
-      if (!users || users.length === 0) {
-        const hashedAdmin = await this.hashPassword('admin');
-        const hashedExec = await this.hashPassword('executor');
-        const hashedHeir = await this.hashPassword('heir');
-        const hashedBen = await this.hashPassword('beneficiary');
-        const defaultUsers = [
-          { id: 1, username: 'admin', password: hashedAdmin, name: 'System Admin', role: 'Admin', email: 'admin@estatepro.local' },
-          { id: 2, username: 'executor', password: hashedExec, name: 'Michael Johnson', role: 'Executor', email: 'michael@email.com' },
-          { id: 3, username: 'heir', password: hashedHeir, name: 'Sarah Johnson', role: 'Heir', email: 'sarah@email.com' },
-          { id: 4, username: 'beneficiary', password: hashedBen, name: 'David Johnson', role: 'Beneficiary', email: 'david@email.com' }
-        ];
-        this._usersCache = defaultUsers;
-        await App.Crypto.writeStorage('estatepro_users', defaultUsers);
-      } else {
-        this._usersCache = users;
+      try {
+        const users = await App.Crypto.readStorage('estatepro_users');
+        if (!users || users.length === 0) {
+          const hashedAdmin = await this.hashPassword('admin');
+          const hashedExec = await this.hashPassword('executor');
+          const hashedHeir = await this.hashPassword('heir');
+          const hashedBen = await this.hashPassword('beneficiary');
+          const defaultUsers = [
+            { id: 1, username: 'admin', password: hashedAdmin, name: 'System Admin', role: 'Admin', email: 'admin@estatepro.local' },
+            { id: 2, username: 'executor', password: hashedExec, name: 'Michael Johnson', role: 'Executor', email: 'michael@email.com' },
+            { id: 3, username: 'heir', password: hashedHeir, name: 'Sarah Johnson', role: 'Heir', email: 'sarah@email.com' },
+            { id: 4, username: 'beneficiary', password: hashedBen, name: 'David Johnson', role: 'Beneficiary', email: 'david@email.com' }
+          ];
+          this._usersCache = defaultUsers;
+          await App.Crypto.writeStorage('estatepro_users', defaultUsers);
+        } else {
+          this._usersCache = users;
+        }
+      } catch (e) {
+        console.error('Auth.init failed:', e);
+        this._usersCache = [];
       }
     },
 
@@ -126,8 +148,8 @@ const App = {
       if (!verify.valid) {
         return { success: false, message: 'Invalid username or password.' };
       }
-      // Migrate legacy SHA-256 hash to PBKDF2 on successful login
-      if (verify.legacy) {
+      // Migrate legacy SHA-256 or fallback hash to PBKDF2 on successful login
+      if ((verify.legacy || verify.fallback) && App.Crypto._hasSubtle()) {
         user.password = await this.hashPassword(password);
         await this.saveUsers(users);
       }
@@ -328,6 +350,84 @@ const App = {
         bytes[i] = binary.charCodeAt(i);
       }
       return bytes;
+    },
+
+    _hasSubtle() {
+      try {
+        return typeof crypto !== 'undefined' && !!crypto.subtle && typeof crypto.subtle.importKey === 'function';
+      } catch (e) {
+        return false;
+      }
+    },
+
+    async _sha256Fallback(message) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(message);
+      const K = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+      ];
+      const h = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+      const blocks = [];
+      const len = data.length;
+      let i = 0;
+      let w = [];
+      while (i < len) {
+        blocks.push(data[i] & 0xff);
+        i++;
+      }
+      blocks.push(0x80);
+      while ((blocks.length % 64) !== 56) {
+        blocks.push(0);
+      }
+      const bitLen = len * 8;
+      for (let i = 0; i < 8; i++) {
+        blocks.push((bitLen >>> (56 - i * 8)) & 0xff);
+      }
+      for (let i = 0; i < blocks.length; i += 64) {
+        const block = blocks.slice(i, i + 64);
+        for (let t = 0; t < 64; t++) {
+          if (t < 16) {
+            w[t] = (block[t * 4] << 24) | (block[t * 4 + 1] << 16) | (block[t * 4 + 2] << 8) | block[t * 4 + 3];
+          } else {
+            const s0 = ((w[t - 15] >>> 7) | (w[t - 15] << 25)) ^ ((w[t - 15] >>> 18) | (w[t - 15] << 14)) ^ (w[t - 15] >>> 3);
+            const s1 = ((w[t - 2] >>> 17) | (w[t - 2] << 15)) ^ ((w[t - 2] >>> 19) | (w[t - 2] << 13)) ^ (w[t - 2] >>> 10);
+            w[t] = (w[t - 16] + s0 + w[t - 7] + s1) | 0;
+          }
+        }
+        let a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+        for (let t = 0; t < 64; t++) {
+          const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+          const ch = (e & f) ^ (~e & g);
+          const temp1 = (hh + S1 + ch + K[t] + w[t]) | 0;
+          const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+          const maj = (a & b) ^ (a & c) ^ (b & c);
+          const temp2 = (S0 + maj) | 0;
+          hh = g;
+          g = f;
+          f = e;
+          e = (d + temp1) | 0;
+          d = c;
+          c = b;
+          b = a;
+          a = (temp1 + temp2) | 0;
+        }
+        h[0] = (h[0] + a) | 0;
+        h[1] = (h[1] + b) | 0;
+        h[2] = (h[2] + c) | 0;
+        h[3] = (h[3] + d) | 0;
+        h[4] = (h[4] + e) | 0;
+        h[5] = (h[5] + f) | 0;
+        h[6] = (h[6] + g) | 0;
+        h[7] = (h[7] + hh) | 0;
+      }
+      return h.map(v => (v >>> 0).toString(16).padStart(8, '0')).join('');
     },
 
     async _deriveKey(passphrase, salt) {
@@ -540,13 +640,21 @@ const App = {
         return new Promise((resolve) => {
           App.UI.showPassphraseModal(async () => {
             await App.Data.init();
-            await App.Auth.init();
+            try {
+              await App.Auth.init();
+            } catch (e) {
+              console.error('Auth.init failed during passphrase modal:', e);
+            }
             resolve();
           });
         });
       }
       await App.Data.init();
-      await App.Auth.init();
+      try {
+        await App.Auth.init();
+      } catch (e) {
+        console.error('Auth.init failed during Crypto.init:', e);
+      }
     }
   },
 
@@ -652,14 +760,14 @@ const App = {
           funeralHome: 'Springfield Memorial Funeral Home',
           obituaryPublished: 'Yes - Springfield Gazette, Jan 12, 2024',
           documents: [
-            { id: 1, name: 'Original Will', status: 'Found', notes: 'Located in safe deposit box', dueDate: '2024-02-01', assignedTo: 'Michael Johnson' },
-            { id: 2, name: 'Death Certificates', status: 'Found', notes: '10 certified copies ordered', dueDate: '2024-01-20', assignedTo: 'Michael Johnson' },
-            { id: 3, name: 'Safe Deposit Box Key', status: 'Found', notes: 'Key found in desk drawer', dueDate: '2024-01-15', assignedTo: 'Sarah Johnson' },
-            { id: 4, name: 'Trust Documents', status: 'Missing', notes: 'Checking with attorney', dueDate: '2024-03-01', assignedTo: 'Robert Chen (Attorney)' },
-            { id: 5, name: 'Life Insurance Policies', status: 'Found', notes: 'State Farm policy #LF-9988776', dueDate: '2024-02-15', assignedTo: 'Michael Johnson' },
-            { id: 6, name: 'Pension / Retirement Docs', status: 'Missing', notes: 'Vanguard IRA statements pending', dueDate: '2024-03-15', assignedTo: 'David Johnson' },
-            { id: 7, name: 'Property Deeds', status: 'Found', notes: 'Primary residence deed', dueDate: '2024-02-01', assignedTo: 'Michael Johnson' },
-            { id: 8, name: 'Vehicle Titles', status: 'Found', notes: '2019 Honda Accord', dueDate: '2024-02-01', assignedTo: 'Sarah Johnson' }
+            { id: 1, name: 'Original Will', status: 'Found', notes: 'Located in safe deposit box' },
+            { id: 2, name: 'Death Certificates', status: 'Found', notes: '10 certified copies ordered' },
+            { id: 3, name: 'Safe Deposit Box Key', status: 'Found', notes: 'Key found in desk drawer' },
+            { id: 4, name: 'Trust Documents', status: 'Missing', notes: 'Checking with attorney' },
+            { id: 5, name: 'Life Insurance Policies', status: 'Found', notes: 'State Farm policy #LF-9988776' },
+            { id: 6, name: 'Pension / Retirement Docs', status: 'Missing', notes: 'Vanguard IRA statements pending' },
+            { id: 7, name: 'Property Deeds', status: 'Found', notes: 'Primary residence deed' },
+            { id: 8, name: 'Vehicle Titles', status: 'Found', notes: '2019 Honda Accord' }
           ]
         },
         executor: {
@@ -678,14 +786,14 @@ const App = {
           attorneyEmail: 'rchen@chenlaw.com',
           notes: 'EIN obtained: 37-1234567. Letters testamentary issued Jan 25, 2024.',
           documents: [
-            { id: 1, name: 'Letters Testamentary', status: 'Found', notes: 'Issued Jan 25, 2024 by Sangamon County', dueDate: '2024-02-01', assignedTo: 'Michael Johnson' },
-            { id: 2, name: 'Bond Receipt / Certificate', status: 'Found', notes: 'Surety bond $50,000 posted with Illinois Bonding Co.', dueDate: '2024-02-01', assignedTo: 'Michael Johnson' },
-            { id: 3, name: 'EIN Confirmation Letter', status: 'Found', notes: 'IRS SS-4 confirmation received, EIN 37-1234567', dueDate: '2024-02-05', assignedTo: 'Michael Johnson' },
-            { id: 4, name: 'Petition for Probate Filing', status: 'Found', notes: 'Filed Jan 22, 2024 with county clerk', dueDate: '2024-01-25', assignedTo: 'Robert Chen (Attorney)' },
-            { id: 5, name: 'Oath of Executor', status: 'Found', notes: 'Signed and filed with probate court', dueDate: '2024-01-25', assignedTo: 'Michael Johnson' },
-            { id: 6, name: 'Notice to Creditors Publication', status: 'Found', notes: 'Published in Springfield Gazette, 3 consecutive weeks', dueDate: '2024-02-15', assignedTo: 'Robert Chen (Attorney)' },
-            { id: 7, name: 'Inventory & Appraisal Filing', status: 'Missing', notes: 'Due within 90 days of appointment; gathering appraisals', dueDate: '2024-04-25', assignedTo: 'Michael Johnson' },
-            { id: 8, name: 'Final Accounting & Report', status: 'Missing', notes: 'To be prepared after all distributions complete', dueDate: '2024-08-01', assignedTo: 'Robert Chen (Attorney)' }
+            { id: 1, name: 'Letters Testamentary', status: 'Found', notes: 'Issued Jan 25, 2024 by Sangamon County' },
+            { id: 2, name: 'Bond Receipt / Certificate', status: 'Found', notes: 'Surety bond $50,000 posted with Illinois Bonding Co.' },
+            { id: 3, name: 'EIN Confirmation Letter', status: 'Found', notes: 'IRS SS-4 confirmation received, EIN 37-1234567' },
+            { id: 4, name: 'Petition for Probate Filing', status: 'Found', notes: 'Filed Jan 22, 2024 with county clerk' },
+            { id: 5, name: 'Oath of Executor', status: 'Found', notes: 'Signed and filed with probate court' },
+            { id: 6, name: 'Notice to Creditors Publication', status: 'Found', notes: 'Published in Springfield Gazette, 3 consecutive weeks' },
+            { id: 7, name: 'Inventory & Appraisal Filing', status: 'Missing', notes: 'Due within 90 days of appointment; gathering appraisals' },
+            { id: 8, name: 'Final Accounting & Report', status: 'Missing', notes: 'To be prepared after all distributions complete' }
           ]
         },
         tasks: [
@@ -2353,7 +2461,11 @@ App.init = async function() {
   if (this.Crypto.isEncryptionEnabled() && !this.Crypto.hasPassphrase()) {
     this.Crypto.loadPassphraseFromSession();
   }
-  await this.Crypto.init();
+  try {
+    await this.Crypto.init();
+  } catch (e) {
+    console.error('Crypto.init failed during App.init:', e);
+  }
   this.UI.init();
 };
 

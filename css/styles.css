@@ -897,24 +897,6 @@ body[data-can-manage="true"] .admin-only.table { display: table !important; }
   color: var(--text-primary);
 }
 
-.checklist-item-assigned {
-  font-size: 0.8rem;
-  color: var(--accent-color);
-  margin-left: 0.5rem;
-  font-weight: 500;
-}
-
-.checklist-item-due {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  margin-left: 0.5rem;
-}
-
-.checklist-item-due-overdue {
-  color: var(--danger-color);
-  font-weight: 600;
-}
-
 .checklist-item-notes {
   font-size: 0.8rem;
   color: var(--text-secondary);
@@ -943,17 +925,6 @@ body[data-can-manage="true"] .admin-only.table { display: table !important; }
   margin-bottom: 0;
   padding: 0.35rem 0.5rem;
   font-size: 0.85rem;
-}
-
-.checklist-edit-row .doc-due {
-  width: 130px;
-  min-width: 130px;
-  flex: none;
-}
-
-.checklist-edit-row .doc-assigned {
-  flex: 1;
-  min-width: 120px;
 }
 
 .checklist-edit-row .btn-icon {

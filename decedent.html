@@ -243,17 +243,10 @@
           };
           return `<span class="badge ${classes[status] || 'badge-default'}">${icons[status] || ''} ${status}</span>`;
         };
-        const today = new Date(new Date().toDateString());
-        const isOverdue = (dueDate) => {
-          if (!dueDate) return false;
-          return new Date(dueDate + 'T00:00:00') < today;
-        };
         container.innerHTML = docs.map(doc => `
           <div class="checklist-item">
             <span class="checklist-item-status">${statusBadge(doc.status)}</span>
             <span class="checklist-item-name">${App.UI.escapeHtml(doc.name)}</span>
-            ${doc.assignedTo ? `<span class="checklist-item-assigned">${App.UI.escapeHtml(doc.assignedTo)}</span>` : ''}
-            ${doc.dueDate ? `<span class="checklist-item-due ${isOverdue(doc.dueDate) && doc.status !== 'Found' ? 'checklist-item-due-overdue' : ''}">${isOverdue(doc.dueDate) && doc.status !== 'Found' ? '<svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> ' : ''}Due ${App.UI.formatDate(doc.dueDate)}</span>` : ''}
             ${doc.notes ? `<span class="checklist-item-notes">${App.UI.escapeHtml(doc.notes)}</span>` : ''}
           </div>
         `).join('');
@@ -353,8 +346,6 @@
               <option value="Missing" ${doc.status === 'Missing' ? 'selected' : ''}>Missing</option>
               <option value="Not Applicable" ${doc.status === 'Not Applicable' ? 'selected' : ''}>Not Applicable</option>
             </select>
-            <input type="date" class="form-input doc-due" placeholder="Due date" value="${App.UI.escapeHtml(doc.dueDate || '')}" onchange="updateDocumentDueDate(${index}, this.value)">
-            <input type="text" class="form-input doc-assigned" placeholder="Assigned to" value="${App.UI.escapeHtml(doc.assignedTo || '')}" onchange="updateDocumentAssignedTo(${index}, this.value)">
             <input type="text" class="form-input doc-notes" placeholder="Notes (optional)" value="${App.UI.escapeHtml(doc.notes || '')}" onchange="updateDocumentNotes(${index}, this.value)">
             <button type="button" class="btn-icon" onclick="deleteDocumentItem(${index})" title="Remove" aria-label="Remove document">
               <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg>
@@ -371,14 +362,6 @@
         editingDocuments[index].status = value;
       };
 
-      window.updateDocumentDueDate = function(index, value) {
-        editingDocuments[index].dueDate = value;
-      };
-
-      window.updateDocumentAssignedTo = function(index, value) {
-        editingDocuments[index].assignedTo = value;
-      };
-
       window.updateDocumentNotes = function(index, value) {
         editingDocuments[index].notes = value;
       };
@@ -390,7 +373,7 @@
 
       window.addDocumentItem = function() {
         const nextId = editingDocuments.length > 0 ? Math.max(...editingDocuments.map(d => d.id || 0)) + 1 : 1;
-        editingDocuments.push({ id: nextId, name: '', status: 'Missing', dueDate: '', assignedTo: '', notes: '' });
+        editingDocuments.push({ id: nextId, name: '', status: 'Missing', notes: '' });
         renderEditDocumentsList();
       };
 
@@ -422,11 +405,9 @@
         rows.forEach(row => {
           const name = row.querySelector('.doc-name')?.value.trim() || '';
           const status = row.querySelector('.doc-status')?.value || 'Missing';
-          const dueDate = row.querySelector('.doc-due')?.value || '';
-          const assignedTo = row.querySelector('.doc-assigned')?.value.trim() || '';
           const notes = row.querySelector('.doc-notes')?.value.trim() || '';
           if (name) {
-            docs.push({ id: App.Data.getNextId(docs), name, status, dueDate, assignedTo, notes });
+            docs.push({ id: App.Data.getNextId(docs), name, status, notes });
           }
         });
         estate.decedent.documents = docs;
@@ -455,7 +436,7 @@
         ];
         const docs = (d.documents || []).map((doc, i) => ({
           Field: `Document ${i + 1}`,
-          Value: `${doc.name} (${doc.status})${doc.assignedTo ? ' | Assigned: ' + doc.assignedTo : ''}${doc.dueDate ? ' | Due: ' + doc.dueDate : ''}${doc.notes ? ' | Notes: ' + doc.notes : ''}`
+          Value: `${doc.name} (${doc.status})${doc.notes ? ' | Notes: ' + doc.notes : ''}`
         }));
         App.Export.toCSV(data.concat(docs), 'estate-decedent.csv');
       };
