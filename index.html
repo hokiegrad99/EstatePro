@@ -127,8 +127,13 @@
         if (!banner || !reasonEl) return;
         if (!window.App || !window.App.Firebase) return;
         if (window.App.Firebase.isReady && window.App.Firebase.isReady()) return;
-        reasonEl.textContent = (window.App.Firebase.whyNotReady && window.App.Firebase.whyNotReady()) ||
-          'App.Firebase is not initialized.';
+        var rawWhy = window.App.Firebase.whyNotReady && window.App.Firebase.whyNotReady();
+        reasonEl.textContent = (typeof rawWhy === 'string' && rawWhy.trim()) ||
+          'Firebase services did not initialize. The most common cause is ' +
+          'that Cloud Firestore is not yet enabled in your Firebase project ' +
+          '(Firebase Console \u2192 Build \u2192 Firestore Database \u2192 Create database), ' +
+          'or that js/firebase-config.js still has placeholder values. ' +
+          'Open the browser dev console (F12) for full details.';
         banner.style.display = 'block';
       })();
 

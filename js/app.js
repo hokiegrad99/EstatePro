@@ -92,12 +92,25 @@ const App = {
       // (Auth alone could succeed, but we can't write the users/{uid} doc
       // without Firestore — and the ruleset also requires email on create.)
       if (!App.Firebase || !App.Firebase.db) {
-        var reason = (App.Firebase && App.Firebase.whyNotReady && App.Firebase.whyNotReady()) ||
-          'App.Firebase is not initialized.';
+        // Surface the bridge's whyNotReady() directly. We removed the previous
+        // hardcoded "Firebase Firestore did not initialize." prefix because it
+        // was attached to every failure even when the real cause was something
+        // else (config placeholders, auth() returning null, SDK missing, etc.).
+        // The fallback below is polyfilled: it fires only when (a) the bridge
+        // script never ran, (b) App.Firebase is the legacy null stub, or (c)
+        // the user is on a cached build where whyNotReady() returned ''.
+        var rawWhy = (App.Firebase && typeof App.Firebase.whyNotReady === 'function')
+          ? App.Firebase.whyNotReady()
+          : '';
+        var reason = (typeof rawWhy === 'string' && rawWhy.trim()) ||
+          'Firebase services did not initialize. The most common cause is ' +
+          'that Cloud Firestore is not yet enabled in your Firebase project ' +
+          '(Firebase Console \u2192 Build \u2192 Firestore Database \u2192 Create database), ' +
+          'or that js/firebase-config.js still has placeholder values. ' +
+          'Open the browser dev console (F12) for full details.';
         return {
           success: false,
-          message: 'Cannot create account: Firebase Firestore did not initialize. ' +
-            reason + ' See the red banner above the form for details.'
+          message: 'Cannot create account: ' + reason
         };
       }
       try {
