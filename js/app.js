@@ -3,7 +3,16 @@
    Shared JavaScript Module
    ============================================ */
 
-const App = {
+// IMPORTANT: we assign both `const App` AND `window.App` to the same merged
+// object. Firebase compat SDK's bridge currently writes `window.App.Firebase`
+// at top level (loads BEFORE this file). A plain `const App = { ... }` would
+// create a NEW lexical binding that SHADOWS `window.App`, hiding the
+// bridge's `.Firebase` from every reference inside this file. Merging into
+// `window.App` via `Object.assign` keeps the bridge's Firebase stub intact
+// while still allowing the rest of the file to reference properties via the
+// const alias. Don't change this back to just `const App = { ... }` or every
+// App.Firebase check breaks.
+const App = window.App = Object.assign(window.App || {}, {
   /* ============================
      AUTHENTICATION
      ============================ */
@@ -1945,7 +1954,7 @@ const App = {
       el.innerHTML = `<div class="alert alert-${type}">${App.UI.escapeHtml(message)}</div>`;
     }
   }
-};
+});
 
 /* ============================================
    App init & ready callbacks
