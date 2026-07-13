@@ -41,6 +41,47 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/_meta/bootstrap_lock);
     }
 
+    // ---- Phase 3 hardening: per-field shape validation ----
+    // The Phase 2 executor-write rule froze memberIds/roles/pendingInvites/
+    // __founderSecret/createdBy/createdAt but did NOT validate that the four
+    // data collections (tasks/assets/debts/cashflow/heirs) stay arrays nor
+    // that decedent/executor stay objects. A compromised executor could
+    // therefore overwrite them with arbitrary types ('junk' / 42 / null) and
+    // crash the next render loop. Phase 4 will additionally let invite
+    // consumption mutate memberIds/roles -- which is why we tighten the rule
+    // HERE so the new writer path inherits the same shape guarantees.
+    //
+    // Notes on Firestore rules v2 syntax:
+    //   - `data.foo is list` returns FALSE (not throws) when foo is missing.
+    //     We use data.get('foo', null) for clarity: if the field is absent,
+    //     data.get returns the null default, which is not a list, so the
+    //     rule fails loudly with a "missing field" rather than silently
+    //     failing on the type check.
+    //   - Array-of-object schema validation (each task has a title, each
+    //     asset has a value, etc.) is intentionally NOT enforced in rules.
+    //     Firestore can't cheaply walk nested arrays; that's the client's
+    //     job (App.Data._normalize + render loop).
+    //
+    // Sizing rationale (free Tier / Spark plan) -- cap per-field so a
+    // malicious executor can't push a 1MB doc write that breaks free-tier
+    // document-size limits or inflates read costs:
+    //   tasks / assets / debts / heirs / distributions   <= 1000 each
+    //   cashflow (transaction ledger)                   <= 10000
+    //   memberIds (people with access)                  <= 100
+    function isValidEstateShape(data) {
+      return data.get('tasks', null)         is list && data.tasks.size()         <= 1000
+          && data.get('assets', null)        is list && data.assets.size()        <= 1000
+          && data.get('debts', null)         is list && data.debts.size()         <= 1000
+          && data.get('heirs', null)         is list && data.heirs.size()         <= 1000
+          && data.get('distributions', null) is list && data.distributions.size() <= 1000
+          && data.get('cashflow', null)      is list && data.cashflow.size()      <= 10000
+          && data.get('decedent', null)      is map
+          && data.get('executor', null)      is map
+          && data.get('memberIds', null)     is list && data.memberIds.size()     <= 100
+          && data.get('roles', null)         is map
+          && data.get('pendingInvites', null) is map;
+    }
+
     // ---- users/{userId} ----
     // Each user can read and write only their own profile doc.
     match /users/{userId} {
@@ -116,7 +157,8 @@ service cloud.firestore {
         && request.resource.data.memberIds.size() == 1
         && request.resource.data.memberIds[0] == request.auth.uid
         && request.resource.data.roles[request.auth.uid] == 'executor'
-        && request.resource.data.pendingInvites.size() == 0;
+        && request.resource.data.pendingInvites.size() == 0
+        && isValidEstateShape(request.resource.data);
 
       // Phase 2: executor writes allowed; structural/auth fields frozen.
       //
@@ -143,7 +185,8 @@ service cloud.firestore {
         && (!('__founderSecret' in request.resource.data)
             || request.resource.data.__founderSecret == resource.data.__founderSecret)
         && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && request.resource.data.createdAt == resource.data.createdAt
+        && isValidEstateShape(request.resource.data);
 
       // Phase 4 will add: allow delete for executors.
       allow delete: if false;
