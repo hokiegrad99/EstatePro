@@ -14,11 +14,11 @@
  *     firestore.rules.
  * ============================================================ */
 window.__FIREBASE_CONFIG__ = {
-  apiKey: "AIzaSyAWh2YIu0DchXP9DNuKVOak4YOdl7aC1ag",
-  authDomain: "estatepro-58f7b.firebaseapp.com",
-  projectId: "estatepro-58f7b",
-  storageBucket: "estatepro-58f7b.firebasestorage.app",
-  messagingSenderId: "278656016417",
-  appId: "1:278656016417:web:9546662a690f04e96a0360",
-  measurementId: "G-TRGB0SJ3J8"
+  "apiKey": "AIzaSyAWh2YIu0DchXP9DNuKVOak4YOdl7aC1ag",
+  "authDomain": "estatepro-58f7b.firebaseapp.com",
+  "projectId": "estatepro-58f7b",
+  "storageBucket": "estatepro-58f7b.firebasestorage.app",
+  "messagingSenderId": "278656016417",
+  "appId": "1:278656016417:web:9546662a690f04e96a0360",
+  "measurementId": "G-TRGB0SJ3J8"
 };
