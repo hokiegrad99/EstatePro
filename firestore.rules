@@ -32,6 +32,14 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/estates/$(estateId))
         && request.auth.uid in get(/databases/$(database)/documents/estates/$(estateId)).data.memberIds;
     }
+    function isBootstrapLocked() {
+      // Per-project bootstrap pattern: a /_meta/bootstrap_lock document is
+      // created transactionally alongside the very first founder-estate.
+      // Once it exists, no additional founder-estates can be created in this
+      // project. Any signed-in user needs to be able to read it so bootstrap.html
+      // and index.html can decide whether the bootstrap form / hint should be shown.
+      return exists(/databases/$(database)/documents/_meta/bootstrap_lock);
+    }
 
     // ---- users/{userId} ----
     // Each user can read and write only their own profile doc.
@@ -44,6 +52,42 @@ service cloud.firestore {
         && request.resource.data.email is string;
     }
 
+    // ---- _meta/{metaId} ----
+    // Bootstrap lock doc lives here, keyed at the conventional
+    // _meta/bootstrap_lock path. This doc is consulted by:
+    //   - bootstrap.html: client pre-check — show the founder form?
+    //   - index.html:     client pre-check — surface the "no estate yet" hint?
+    //   - the rules below: belt-and-suspenders gate on estates/{id}.create
+    //
+    // The ONLY path that creates the lock is the runTransaction call inside
+    // bootstrap.html, which atomically creates BOTH the lock and the first
+    // estate. update/delete are forbidden here so the lock is genuinely one-shot:
+    // even after Phase 4 brings admin-tooling, retiring a project will go
+    // through a Cloud Function or admin-only manual step, not the client.
+    match /_meta/{metaId} {
+      allow read: if isSignedIn();
+      // Create is allowed only for the very first time the doc is written.
+      // After that, the server rejects further creates of the same doc-id,
+      // and any attempt to write a different doc-id under /_meta is also
+      // blocked because the precondition fails (the doc would not yet exist
+      // — wait, that's actually allowed since !exists is true). So we
+      // additionally scope creates to the well-known doc-id bootstrap_lock
+      // by requiring the caller to know the name. (Firestore rules can't
+      // enumerate doc ids, so this is enforced by the bootstrap.html client
+      // writing only '_meta/bootstrap_lock'.)
+      // Create is allowed ONLY for the well-known _meta/bootstrap_lock doc-id.
+      // Without this scope check, any signed-in user could spam-create arbitrary
+      // _meta/* docs (each one consumes a read on every bootstrap check forever,
+      // and our `update, delete: false` ruleset means nobody can ever clean
+      // them up client-side). Restricting the doc-id to a known constant keeps
+      // the collection clean.
+      allow create: if isSignedIn()
+        && metaId == 'bootstrap_lock'
+        && !exists(/databases/$(database)/documents/_meta/$(metaId));
+      // Single-shot: the lock can never be moved or deleted client-side.
+      allow update, delete: if false;
+    }
+
     // ---- estates/{estateId} ----
     // Phase 1: only "read if member" + "create via founder-bootstrap".
     match /estates/{estateId} {
@@ -51,14 +95,19 @@ service cloud.firestore {
 
       // Founder bootstrap path. Caller must:
       //   1. Be signed in.
-      //   2. Pass __founderSecret as a 64-char hex string (SHA-256).
-      //   3. The hex must match the constant pinned below.
-      //   4. Make themselves the only member and assign themselves executor.
-      //   5. Start with an empty pendingInvites map.
+      //   2. The bootstrap lock must NOT already exist (i.e., this is the
+      //      FIRST founder-estate for this project). This is belt-and-suspenders
+      //      alongside the runTransaction guard in bootstrap.html — even if
+      //      someone bypassed the UI check, this rule refuses.
+      //   3. Pass __founderSecret as a 64-char hex string (SHA-256).
+      //   4. The hex must match the constant pinned below.
+      //   5. Make themselves the only member and assign themselves executor.
+      //   6. Start with an empty pendingInvites map.
       //
       // The constant below is the SHA-256 hex of YOUR secret. See FIREBASE-SETUP.md.
       // Do NOT use the placeholder below — replace it before deploying.
       allow create: if isSignedIn()
+        && !isBootstrapLocked()
         && '__founderSecret' in request.resource.data
         && request.resource.data.__founderSecret is string
         && request.resource.data.__founderSecret.size() == 64

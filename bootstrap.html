@@ -136,11 +136,14 @@
         }
         authGateMessage.style.display = 'none';
 
-        // Cheap heuristic: if any estates already exist, refuse to show the form.
-        // We only need to read _one_ doc to know. Limit the query to one read.
-        db.collection('estates').limit(1).get()
+        // Pre-check: read the /_meta/bootstrap_lock doc to decide whether the
+        // form should be shown. Reading any /estates/* collection is denied by
+        // the security rules unless you're already a member, so we read a
+        // separate small marker doc under /_meta/bootstrap_lock that any
+        // signed-in user is allowed to read by rule.
+        db.doc('_meta/bootstrap_lock').get()
           .then(function (snap) {
-            if (!snap.empty) {
+            if (snap.exists) {
               alreadyMsg.style.display = 'block';
               form.style.display = 'none';
               return;
@@ -148,7 +151,7 @@
             form.style.display = 'block';
           })
           .catch(function (err) {
-            showMsg('Failed to query estates: ' + escapeHtml(err.message || err), 'danger');
+            showMsg('Failed to check bootstrap status: ' + escapeHtml(err.message || err), 'danger');
           });
       });
 
@@ -195,8 +198,31 @@
           estateDoc.roles = {};
           estateDoc.roles[user.uid] = 'executor';
 
-          var ref = db.collection('estates').doc();
-          await ref.set(estateDoc);
+          // Atomically: assert the lock is unset, then create BOTH the lock
+          // doc and the new estate doc in one Firestore runTransaction.
+          // If two users race to bootstrap at the same time, only one wins:
+          // the loser's transaction aborts because tx.get(lockRef) sees the
+          // just-committed lock. ALREADY_EXISTS at the server layer would be
+          // the same outcome — either way, exactly one estate is ever created
+          // via this path.
+          var lockRef = db.doc('_meta/bootstrap_lock');
+          var newEstateRef = db.collection('estates').doc();
+          await db.runTransaction(async function (tx) {
+            var lockSnap = await tx.get(lockRef);
+            if (lockSnap.exists) {
+              throw new Error(
+                'A founder estate has already been created in this project. ' +
+                'The bootstrap path is one-time per project. Sign in and ask ' +
+                'an existing executor to invite you instead.'
+              );
+            }
+            tx.set(lockRef, {
+              bootstrappedAt: now,
+              founderUid: user.uid,
+              firstEstateId: newEstateRef.id
+            });
+            tx.set(newEstateRef, estateDoc);
+          });
 
           showMsg(
             '<strong>Estate "' + escapeHtml(estateName) + '" created!</strong><br>' +

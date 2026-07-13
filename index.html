@@ -244,9 +244,13 @@
             bootstrapHint.style.display = 'none';
             return;
           }
-          window.App.Firebase.db.collection('estates').limit(1).get()
+          // The "no estates yet?" hint is gated by reading the /_meta/bootstrap_lock
+          // doc. Reading /estates/* collection is denied unless you're already a
+          // member, so we read the lock doc instead — any signed-in user is
+          // allowed to read it by rule, and snap.exists === false fires the hint.
+          window.App.Firebase.db.doc('_meta/bootstrap_lock').get()
             .then(function (snap) {
-              bootstrapHint.style.display = snap.empty ? 'block' : 'none';
+              bootstrapHint.style.display = snap.exists ? 'none' : 'block';
             })
             .catch(function () {
               // Don't show the hint if we can't tell.
