@@ -17,7 +17,7 @@
         <li><a href="dashboard.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Dashboard</a></li>
         <li><a href="tasks.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Tasks</a></li>
         <li><a href="executor.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Executor</a></li>
-        <li><a href="decedent.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Mom</a></li>
+        <li><a href="decedent.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>Decedent</a></li>
         <li><a href="assets.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> Assets</a></li>
         <li><a href="debts.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg> Debts</a></li>
         <li><a href="cashflow.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> Cashflow</a></li>
@@ -49,7 +49,7 @@
     <div class="content">
       <div class="print-only print-header">
         <h2>EstatePro - Heirs Report</h2>
-        <p>Estate of Margaret Elizabeth Johnson</p>
+        <p class="print-tagline">Estate of <span id="printDecedentName"></span><span class="print-qualifier"> ("Decedent")</span></p>
         <p>Generated: <span id="printDate"></span></p>
       </div>
 
@@ -181,6 +181,7 @@
       document.getElementById('userName').textContent = user.name;
       document.getElementById('userAvatar').textContent = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
       document.getElementById('printDate').textContent = new Date().toLocaleDateString();
+      { const _d = App.Data.getEstate().decedent || {}; const _pn = document.getElementById('printDecedentName'); if (_pn) _pn.textContent = _d.fullName || _d.name || '—'; }
 
       function renderHeirs() {
         const estate = App.Data.getEstate();

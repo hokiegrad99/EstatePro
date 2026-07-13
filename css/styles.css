@@ -1077,3 +1077,18 @@ body[data-can-manage="true"] .admin-only.table { display: table !important; }
     display: block;
   }
 }
+
+/* Print-only title-block: name and (\"Decedent\") qualifier share a row, qualifier right-justified. */
+@media print {
+  .print-only .print-header .print-tagline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5em;
+  }
+  .print-only .print-header .print-qualifier {
+    margin-left: auto;
+    font-style: italic;
+    color: var(--text-secondary);
+  }
+}

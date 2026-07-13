@@ -5,6 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EstatePro - Dashboard</title>
   <link rel="stylesheet" href="css/styles.css">
+  <style>
+    a.stat-card-link {
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      cursor: pointer;
+    }
+    a.stat-card-link:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      border-color: var(--primary-color, #2563eb);
+    }
+    a.stat-card-link:focus-visible {
+      outline: 2px solid var(--primary-color, #2563eb);
+      outline-offset: 2px;
+    }
+    .card-title a {
+      text-decoration: none;
+      color: inherit;
+      transition: color 0.15s ease;
+    }
+    .card-title a:hover {
+      color: var(--primary-color, #2563eb);
+      text-decoration: underline;
+    }
+    .card-title a:focus-visible {
+      outline: 2px solid var(--primary-color, #2563eb);
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+  </style>
 </head>
 <body>
   <!-- Sidebar -->
@@ -18,7 +50,7 @@
         <li><a href="dashboard.html" class="active"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Dashboard</a></li>
         <li><a href="tasks.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Tasks</a></li>
         <li><a href="executor.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Executor</a></li>
-        <li><a href="decedent.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Mom</a></li>
+        <li><a href="decedent.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>Decedent</a></li>
         <li><a href="assets.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> Assets</a></li>
         <li><a href="debts.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg> Debts</a></li>
         <li><a href="cashflow.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> Cashflow</a></li>
@@ -56,31 +88,31 @@
       <!-- Print Header -->
       <div class="print-only print-header">
         <h2>EstatePro - Estate Overview Report</h2>
-        <p>Estate of Margaret Elizabeth Johnson ("Mom")</p>
+        <p class="print-tagline">Estate of <span id="printDecedentName"></span><span class="print-qualifier"> ("Decedent")</span></p>
         <p>Generated: <span id="printDate"></span></p>
       </div>
 
       <!-- Stats Grid -->
       <div class="stats-grid">
-        <div class="stat-card">
+        <a class="stat-card stat-card-link" href="decedent.html" aria-label="View decedent" title="View decedent">
           <div class="stat-icon blue"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg></div>
-          <div class="stat-label">Total Assets</div>
-          <div class="stat-value" id="totalAssets">$0</div>
-          <div class="stat-change positive">Across <span id="assetCount">0</span> items</div>
-        </div>
-        <div class="stat-card">
+          <div class="stat-label">Value at Death</div>
+          <div class="stat-value" id="valueAtDeath">$0</div>
+          <div class="stat-change positive">Before any distributions</div>
+        </a>
+        <a class="stat-card stat-card-link" href="debts.html" aria-label="View debts" title="View debts">
           <div class="stat-icon red"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg></div>
           <div class="stat-label">Total Debts</div>
           <div class="stat-value" id="totalDebts">$0</div>
           <div class="stat-change negative">From <span id="debtCount">0</span> creditors</div>
-        </div>
-        <div class="stat-card">
+        </a>
+        <a class="stat-card stat-card-link" href="assets.html" aria-label="View assets" title="View assets">
           <div class="stat-icon green"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg></div>
-          <div class="stat-label">Net Estate Value</div>
-          <div class="stat-value" id="netValue">$0</div>
-          <div class="stat-change positive">Est. for distribution</div>
-        </div>
-        <div class="stat-card">
+          <div class="stat-label">Estate Inventory</div>
+          <div class="stat-value" id="estateInventory">$0</div>
+          <div class="stat-change positive">Across <span id="assetCount">0</span> items</div>
+        </a>
+        <a class="stat-card stat-card-link" href="tasks.html" aria-label="View tasks" title="View tasks">
           <div class="stat-icon cyan"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg></div>
           <div class="stat-label">Tasks Progress</div>
           <div class="stat-value" id="taskProgress">0%</div>
@@ -88,7 +120,13 @@
             <div class="progress-bar-fill" id="taskProgressBar" style="width:0%"></div>
           </div>
           <div class="stat-change" style="margin-top:0.25rem; font-size:0.75rem;"><span id="completedTasks">0</span> of <span id="totalTasks">0</span> completed</div>
-        </div>
+        </a>
+        <a class="stat-card stat-card-link" href="distributions.html?status=completed" aria-label="View completed distributions" title="View completed distributions">
+          <div class="stat-icon yellow"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"></path></svg></div>
+          <div class="stat-label">Distributed</div>
+          <div class="stat-value" id="totalDistributed">$0.00</div>
+          <div class="stat-change positive"><span id="completedDistributionCount">0</span> completed distributions &rarr;</div>
+        </a>
       </div>
 
       <!-- Two Column Layout -->
@@ -96,7 +134,7 @@
         <!-- Recent Cashflow -->
         <div class="card">
           <div class="card-header">
-            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> Recent Cashflow</div>
+            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> <a href="cashflow.html" title="View cashflow">Recent Cashflow</a></div>
             <div class="btn-group">
               <a href="cashflow.html" class="btn btn-sm btn-secondary">View All</a>
             </div>
@@ -116,7 +154,7 @@
         <!-- Pending Tasks -->
         <div class="card">
           <div class="card-header">
-            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Pending Tasks</div>
+            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> <a href="tasks.html" title="View tasks">Pending Tasks</a></div>
             <div class="btn-group">
               <a href="tasks.html" class="btn btn-sm btn-secondary">View All</a>
             </div>
@@ -136,7 +174,7 @@
         <!-- Estate Summary -->
         <div class="card">
           <div class="card-header">
-            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Estate Summary</div>
+            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> <a href="decedent.html" title="View decedent">Estate Summary</a></div>
           </div>
           <div class="card-body">
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size:0.9rem;">
@@ -150,10 +188,30 @@
           </div>
         </div>
 
+        <!-- Heir Distribution Breakdown -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"></path></svg> <a href="distributions.html" title="View distributions">Heir Distribution Breakdown</a></div>
+            <div class="btn-group">
+              <a href="distributions.html" class="btn btn-sm btn-secondary">View All</a>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-responsive">
+              <table class="data-table" id="heirBreakdownTable">
+                <thead>
+                  <tr><th>Heir</th><th>Progress</th><th style="text-align:right">% Received</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <!-- Heirs Overview -->
         <div class="card">
           <div class="card-header">
-            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Heirs Overview</div>
+            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> <a href="heirs.html" title="View heirs">Heirs Overview</a></div>
             <div class="btn-group">
               <a href="heirs.html" class="btn btn-sm btn-secondary">View All</a>
             </div>
@@ -198,18 +256,57 @@
       document.getElementById('userName').textContent = user.name;
       document.getElementById('userAvatar').textContent = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
+      // Roll back post-death ledger activity (Income, Expense, Distribution, Debt Payment)
+      // so the figure reflects the estate as it stood at date of death — before any of the
+      // executor's transactions ran. Transfers and Asset Sales cancel out (source -X, dest +X),
+      // so they don't alter the total. Other is a no-op.
+      function computeValueAtDeath(estate) {
+        const cashflow = estate.cashflow || [];
+        let netAssetChangeSinceDeath = 0;
+        let totalDebtPayments = 0;
+        for (const tx of cashflow) {
+          if (!tx) continue;
+          const amt = parseFloat(tx.amount) || 0;
+          if (tx.type === 'Income') {
+            netAssetChangeSinceDeath += amt;
+          } else if (tx.type === 'Expense' || tx.type === 'Distribution') {
+            netAssetChangeSinceDeath -= amt;
+          } else if (tx.type === 'Debt Payment') {
+            netAssetChangeSinceDeath -= amt;
+            totalDebtPayments += amt;
+          }
+        }
+        const currentAssets = (estate.assets || []).reduce((s, a) => s + (parseFloat(a.value) || 0), 0);
+        const currentOutstandingDebts = (estate.debts || [])
+          .filter(d => d.status !== 'Paid')
+          .reduce((s, d) => s + (parseFloat(d.balance) || 0), 0);
+        const atDeathAssets = currentAssets - netAssetChangeSinceDeath;
+        const atDeathDebts = currentOutstandingDebts + totalDebtPayments;
+        return { valueAtDeath: atDeathAssets - atDeathDebts, atDeathAssets, atDeathDebts };
+      }
+
       function renderStats() {
         const estate = App.Data.getEstate();
         const assets = estate.assets || [];
         const debts = estate.debts || [];
         const totalAssets = assets.reduce((sum, a) => sum + (parseFloat(a.value) || 0), 0);
         const totalDebts = debts.filter(d => d.status !== 'Paid').reduce((sum, d) => sum + (parseFloat(d.balance) || 0), 0);
-        const netValue = totalAssets - totalDebts;
-        document.getElementById('totalAssets').textContent = App.UI.formatCurrency(totalAssets);
+        const { valueAtDeath } = computeValueAtDeath(estate);
+        document.getElementById('valueAtDeath').textContent = App.UI.formatCurrency(valueAtDeath);
+        document.getElementById('estateInventory').textContent = App.UI.formatCurrency(totalAssets);
         document.getElementById('assetCount').textContent = assets.length;
         document.getElementById('totalDebts').textContent = App.UI.formatCurrency(totalDebts);
         document.getElementById('debtCount').textContent = debts.filter(d => d.status !== 'Paid').length;
-        document.getElementById('netValue').textContent = App.UI.formatCurrency(netValue);
+      }
+
+      function renderDistributed() {
+        const estate = App.Data.getEstate();
+        const cashflow = estate.cashflow || [];
+        const distributions = cashflow.filter(t => t && t.type === 'Distribution');
+        const completedDistributions = distributions.filter(t => t.cleared === true);
+        const totalDistributed = completedDistributions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+        document.getElementById('totalDistributed').textContent = App.UI.formatCurrency(totalDistributed);
+        document.getElementById('completedDistributionCount').textContent = completedDistributions.length;
       }
 
       function renderTaskProgress() {
@@ -281,6 +378,74 @@
         document.getElementById('summaryState').textContent = d.stateOfResidence || '-';
       }
 
+      function renderHeirBreakdown() {
+        const estate = App.Data.getEstate();
+        const assets = estate.assets || [];
+        const debts = estate.debts || [];
+        const cashflow = estate.cashflow || [];
+        const heirs = (estate.heirs || []).filter(h => h && h.share > 0);
+        // Use the at-death net so heir % shares stay stable as the executor settles debts
+        // and post distributions; otherwise heir percentages would shift over time.
+        const { valueAtDeath: netEstate } = computeValueAtDeath(estate);
+        const completedDistributions = cashflow.filter(t => t && t.type === 'Distribution' && t.cleared === true);
+        const rows = heirs.map(h => {
+          const expected = Math.max(0, netEstate * (h.share / 100));
+          const received = completedDistributions
+            .filter(t => t.heirId === h.id)
+            .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+          let percent;
+          if (expected > 0) {
+            percent = Math.min(100, (received / expected) * 100);
+          } else if (received > 0) {
+            percent = 100;
+          } else {
+            percent = 0;
+          }
+          return {
+            heir: h,
+            expected: expected,
+            received: received,
+            percent: percent,
+            complete: percent >= 99.5
+          };
+        });
+        // Show most-pending heirs first so executors see who still needs attention.
+        rows.sort((a, b) => a.percent - b.percent || (a.heir.id || 0) - (b.heir.id || 0));
+
+        const tbody = document.querySelector('#heirBreakdownTable tbody');
+        if (rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-secondary); padding:1rem;">No heirs with a share percentage yet. Add heirs on the Heirs page to track distribution progress here.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(r => {
+          const expectedLabel = r.expected > 0
+            ? 'expected ' + App.UI.formatCurrency(r.expected)
+            : 'expected —';
+          let fillClass = '';
+          if (r.complete) fillClass = 'success';
+          else if (r.percent < 25) fillClass = 'danger';
+          else if (r.percent < 75) fillClass = 'warning';
+          const statusBadge = r.complete ? 'badge-success' : 'badge-warning';
+          const statusText = r.complete ? 'Complete' : 'Pending';
+          const percentLabel = Number.isFinite(r.percent) ? r.percent.toFixed(0) + '%' : '—';
+          return `<tr>
+            <td>
+              <div style="font-weight:600;">${App.UI.escapeHtml(r.heir.name)}</div>
+              <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.15rem;">${App.UI.escapeHtml(r.heir.relationship || '')} · ${r.heir.share}% share · ${expectedLabel}</div>
+            </td>
+            <td>
+              <div class="progress-bar" style="height:8px; margin:0;">
+                <div class="progress-bar-fill ${fillClass}" style="width:${percentLabel}" role="progressbar" aria-valuenow="${percentLabel}" aria-valuemin="0" aria-valuemax="100"></div>
+              </div>
+              <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.3rem;">${App.UI.formatCurrency(r.received)} received</div>
+            </td>
+            <td style="text-align:right;">
+              <span class="badge ${statusBadge}" title="${statusText}">${percentLabel}</span>
+            </td>
+          </tr>`;
+        }).join('');
+      }
+
       function renderAll() {
         renderStats();
         renderTaskProgress();
@@ -288,7 +453,10 @@
         renderPendingTasks();
         renderHeirsOverview();
         renderEstateSummary();
+        renderHeirBreakdown();
+        renderDistributed();
         document.getElementById('printDate').textContent = new Date().toLocaleDateString();
+      { const _d = App.Data.getEstate().decedent || {}; const _pn = document.getElementById('printDecedentName'); if (_pn) _pn.textContent = _d.fullName || _d.name || '—'; }
       }
 
       App.onReady(() => {
@@ -306,10 +474,16 @@
 
     function exportDashboardCSV() {
       const estate = App.Data.getEstate();
+      const completedDistributions = (estate.cashflow || []).filter(t => t && t.type === 'Distribution' && t.cleared === true);
+      const totalDistributed = completedDistributions.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const inventoryValue = estate.assets.reduce((s, a) => s + (parseFloat(a.value) || 0), 0);
+      const outstandingDebts = estate.debts.filter(d => d.status !== 'Paid').reduce((s, d) => s + (parseFloat(d.balance) || 0), 0);
+      const { valueAtDeath } = computeValueAtDeath(estate);
       const data = [
-        { Metric: 'Total Assets', Value: App.UI.formatCurrency(estate.assets.reduce((s, a) => s + (parseFloat(a.value) || 0), 0)) },
-        { Metric: 'Total Debts', Value: App.UI.formatCurrency(estate.debts.filter(d => d.status !== 'Paid').reduce((s, d) => s + (parseFloat(d.balance) || 0), 0)) },
-        { Metric: 'Net Estate Value', Value: App.UI.formatCurrency(estate.assets.reduce((s, a) => s + (parseFloat(a.value) || 0), 0) - estate.debts.filter(d => d.status !== 'Paid').reduce((s, d) => s + (parseFloat(d.balance) || 0), 0)) },
+        { Metric: 'Value at Death', Value: App.UI.formatCurrency(valueAtDeath) + ' (before distributions)' },
+        { Metric: 'Estate Inventory', Value: App.UI.formatCurrency(inventoryValue) },
+        { Metric: 'Total Debts', Value: App.UI.formatCurrency(outstandingDebts) },
+        { Metric: 'Distributed (completed)', Value: App.UI.formatCurrency(totalDistributed) + ' (' + completedDistributions.length + ' distributions)' },
         { Metric: 'Tasks Completed', Value: estate.tasks.filter(t => t.status === 'Completed').length + ' of ' + estate.tasks.length },
         { Metric: 'Number of Assets', Value: estate.assets.length },
         { Metric: 'Number of Debts', Value: estate.debts.length },

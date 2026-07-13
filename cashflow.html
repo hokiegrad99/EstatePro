@@ -17,7 +17,7 @@
         <li><a href="dashboard.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Dashboard</a></li>
         <li><a href="tasks.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Tasks</a></li>
         <li><a href="executor.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Executor</a></li>
-        <li><a href="decedent.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Mom</a></li>
+        <li><a href="decedent.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>Decedent</a></li>
         <li><a href="assets.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> Assets</a></li>
         <li><a href="debts.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg> Debts</a></li>
         <li><a href="cashflow.html" class="active"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> Cashflow</a></li>
@@ -49,7 +49,7 @@
     <div class="content">
       <div class="print-only print-header">
         <h2>EstatePro - Cashflow Report</h2>
-        <p>Estate of Margaret Elizabeth Johnson</p>
+        <p class="print-tagline">Estate of <span id="printDecedentName"></span><span class="print-qualifier"> ("Decedent")</span></p>
         <p>Generated: <span id="printDate"></span></p>
       </div>
 
@@ -90,6 +90,9 @@
             <button type="button" class="tab active" data-tab="all">All</button>
             <button type="button" class="tab" data-tab="income">Income</button>
             <button type="button" class="tab" data-tab="expense">Expenses</button>
+            <button type="button" class="tab" data-tab="transfers-sales">Transfers &amp; Sales</button>
+            <button type="button" class="tab" data-tab="payments-dists">Payments &amp; Dists.</button>
+            <button type="button" class="tab" data-tab="other">Other</button>
           </div>
           <div class="table-responsive">
             <table class="data-table" id="cashflowTable">
@@ -100,6 +103,7 @@
                   <th>Category</th>
                   <th>Description</th>
                   <th>Account</th>
+                  <th>Linked</th>
                   <th style="text-align:right">Amount</th>
                   <th style="text-align:right">Running Balance</th>
                   <th class="edit-only no-print">Actions</th>
@@ -129,31 +133,21 @@
             </div>
             <div class="form-group">
               <label class="form-label" for="cfType">Type</label>
-              <select id="cfType" class="form-select" required>
+              <select id="cfType" class="form-select" required onchange="onCashflowTypeChange()">
                 <option value="Income">Income</option>
                 <option value="Expense">Expense</option>
+                <option value="Transfer">Transfer</option>
+                <option value="Distribution">Distribution</option>
+                <option value="Debt Payment">Debt Payment</option>
+                <option value="Asset Sale">Asset Sale</option>
+                <option value="Other">Other</option>
               </select>
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="cfCategory">Category</label>
-              <select id="cfCategory" class="form-select" required>
-                <option value="Pension">Pension</option>
-                <option value="Life Insurance">Life Insurance</option>
-                <option value="Interest">Interest</option>
-                <option value="Dividend">Dividend</option>
-                <option value="Asset Sale">Asset Sale</option>
-                <option value="Funeral">Funeral</option>
-                <option value="Medical">Medical</option>
-                <option value="Legal">Legal</option>
-                <option value="Utility">Utility</option>
-                <option value="Tax">Tax</option>
-                <option value="Maintenance">Maintenance</option>
-                <option value="Credit Card">Credit Card</option>
-                <option value="Insurance">Insurance</option>
-                <option value="Other">Other</option>
-              </select>
+              <select id="cfCategory" class="form-select" required></select>
             </div>
             <div class="form-group">
               <label class="form-label" for="cfAmount">Amount ($)</label>
@@ -167,12 +161,7 @@
           <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="cfAccount">Account</label>
-              <select id="cfAccount" class="form-select">
-                <option value="Checking">Checking</option>
-                <option value="Savings">Savings</option>
-                <option value="Investment">Investment</option>
-                <option value="Other">Other</option>
-              </select>
+              <select id="cfAccount" class="form-select" required></select>
             </div>
             <div class="form-group">
               <label class="form-label" for="cfCleared">Cleared</label>
@@ -182,6 +171,9 @@
               </select>
             </div>
           </div>
+          <!-- Type-specific secondary row(s) for Transfer / Asset Sale / Debt Payment / Distribution -->
+          <div id="cfSubRow" class="form-row" style="display:none;"></div>
+          <div id="cfFormMessages" style="margin-top:0.5rem;"></div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="App.UI.closeModal('cashflowModal')">Cancel</button>
@@ -199,7 +191,363 @@
       document.getElementById('userName').textContent = user.name;
       document.getElementById('userAvatar').textContent = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
       document.getElementById('printDate').textContent = new Date().toLocaleDateString();
+      { const _d = App.Data.getEstate().decedent || {}; const _pn = document.getElementById('printDecedentName'); if (_pn) _pn.textContent = _d.fullName || _d.name || '—'; }
 
+      // ---- Lookup helpers ----
+      function getCurrentEstate() { return App.Data.getEstate(); }
+      function getAssetById(estate, id) { return (estate.assets || []).find(a => a.id === id); }
+      function getDebtById(estate, id) { return (estate.debts || []).find(d => d.id === id); }
+      function getHeirById(estate, id) { return (estate.heirs || []).find(h => h.id === id); }
+
+      // ---- Per-Type category list & badge styling ----
+      const CATEGORIES_BY_TYPE = {
+        'Income':       ['Pension', 'Life Insurance', 'Interest', 'Dividend', 'Sale Proceeds', 'Other'],
+        'Expense':      ['Funeral', 'Medical', 'Legal', 'Utility', 'Tax', 'Maintenance', 'Credit Card', 'Insurance', 'Other'],
+        'Transfer':     ['Account Transfer', 'Other'],
+        'Distribution': ['Specific Bequest', 'Residuary Distribution', 'Charity', 'Other'],
+        'Debt Payment': ['Credit Card', 'Medical', 'Funeral', 'Utility', 'Legal', 'Tax', 'Mortgage', 'Other'],
+        'Asset Sale':   ['Real Estate', 'Investment', 'Personal Property', 'Vehicle', 'Other'],
+        'Other':        ['Other']
+      };
+      const BADGE_BY_TYPE = {
+        'Income':       'badge-success',
+        'Expense':      'badge-danger',
+        'Transfer':     'badge-info',
+        'Asset Sale':   'badge-info',
+        'Distribution': 'badge-warning',
+        'Debt Payment': 'badge-warning',
+        'Other':        'badge-default'
+      };
+
+      // ---- Form drop-downs ----
+      function populateAssetDropdown(selectId, currentValueId) {
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        const estate = getCurrentEstate();
+        if (!estate.assets || estate.assets.length === 0) {
+          sel.innerHTML = '<option value="" disabled>No assets yet — add one on the Assets page</option>';
+          return;
+        }
+        sel.innerHTML = estate.assets.map(a =>
+          `<option value="${a.id}"${a.id === currentValueId ? ' selected' : ''}>${App.UI.escapeHtml(a.name)} (${App.UI.formatCurrency(a.value)})</option>`
+        ).join('');
+      }
+      function populateDebtDropdown(selectId, currentValueId) {
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        const estate = getCurrentEstate();
+        if (!estate.debts || estate.debts.length === 0) {
+          sel.innerHTML = '<option value="" disabled>No debts yet — add one on the Debts page</option>';
+          return;
+        }
+        sel.innerHTML = estate.debts.map(d =>
+          `<option value="${d.id}"${d.id === currentValueId ? ' selected' : ''}>${App.UI.escapeHtml(d.name)} — ${App.UI.formatCurrency(d.balance)} owed to ${App.UI.escapeHtml(d.creditor || '')}</option>`
+        ).join('');
+      }
+      function populateHeirDropdown(selectId, currentValueId) {
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        const estate = getCurrentEstate();
+        if (!estate.heirs || estate.heirs.length === 0) {
+          sel.innerHTML = '<option value="" disabled>No heirs yet — add one on the Heirs page</option>';
+          return;
+        }
+        sel.innerHTML = estate.heirs.map(h =>
+          `<option value="${h.id}"${h.id === currentValueId ? ' selected' : ''}>${App.UI.escapeHtml(h.name)} (${App.UI.escapeHtml(h.relationship || 'Heir')})</option>`
+        ).join('');
+      }
+      function populateCategoryDropdown(currentValue) {
+        const sel = document.getElementById('cfCategory');
+        if (!sel) return;
+        const type = document.getElementById('cfType').value;
+        const list = CATEGORIES_BY_TYPE[type] || ['Other'];
+        const safeValue = list.includes(currentValue) ? currentValue : list[0];
+        sel.innerHTML = list.map(c => `<option value="${c}"${c === safeValue ? ' selected' : ''}>${c}</option>`).join('');
+      }
+
+      // ---- Type-specific sub-row (a single secondary pick) ----
+      function renderSubRow(tx) {
+        const subRow = document.getElementById('cfSubRow');
+        if (!subRow) return;
+        const type = document.getElementById('cfType').value;
+        subRow.innerHTML = '';
+        if (type === 'Transfer') {
+          subRow.innerHTML = `
+            <div class="form-group">
+              <label class="form-label" for="cfToAccountId">To Account</label>
+              <select id="cfToAccountId" class="form-select" required></select>
+            </div>
+          `;
+          populateAssetDropdown('cfToAccountId', tx && tx.toAccountId);
+          subRow.style.display = 'flex';
+        } else if (type === 'Asset Sale') {
+          subRow.innerHTML = `
+            <div class="form-group">
+              <label class="form-label" for="cfToAccountId">Proceeds Account</label>
+              <select id="cfToAccountId" class="form-select" required></select>
+            </div>
+          `;
+          populateAssetDropdown('cfToAccountId', tx && tx.toAccountId);
+          subRow.style.display = 'flex';
+        } else if (type === 'Debt Payment') {
+          subRow.innerHTML = `
+            <div class="form-group">
+              <label class="form-label" for="cfDebtId">Debt Being Paid</label>
+              <select id="cfDebtId" class="form-select" required></select>
+            </div>
+          `;
+          populateDebtDropdown('cfDebtId', tx && tx.debtId);
+          subRow.style.display = 'flex';
+        } else if (type === 'Distribution') {
+          subRow.innerHTML = `
+            <div class="form-group">
+              <label class="form-label" for="cfHeirId">Recipient</label>
+              <select id="cfHeirId" class="form-select" required></select>
+            </div>
+          `;
+          populateHeirDropdown('cfHeirId', tx && tx.heirId);
+          subRow.style.display = 'flex';
+        } else {
+          subRow.style.display = 'none';
+          subRow.innerHTML = '';
+        }
+      }
+
+      window.onCashflowTypeChange = function() {
+        populateCategoryDropdown();
+        renderSubRow();
+        clearFormMessages();
+      };
+
+      function clearFormMessages() {
+        const el = document.getElementById('cfFormMessages');
+        if (el) el.innerHTML = '';
+      }
+      function setFormMessage(html) {
+        const el = document.getElementById('cfFormMessages');
+        if (el) el.innerHTML = html;
+      }
+
+      // ---- Apply / Revert a transaction's balance effects on estate ----
+      function mutateAsset(estate, assetId, delta) {
+        const a = getAssetById(estate, assetId);
+        if (!a) return false;
+        const cur = parseFloat(a.value) || 0;
+        a.value = Math.max(0, cur + delta);
+        return true;
+      }
+      function mutateDebt(estate, debtId, delta) {
+        const d = getDebtById(estate, debtId);
+        if (!d) return false;
+        const cur = parseFloat(d.balance) || 0;
+        d.balance = cur + delta;
+        if (d.balance <= 0) {
+          d.balance = 0;
+          if (d.status !== 'Paid') d.status = 'Paid';
+        } else if (d.status === 'Paid') {
+          d.status = 'Active';
+        }
+        return true;
+      }
+      function applyTxToEstate(tx, estate) {
+        if (!tx) return;
+        const amt = parseFloat(tx.amount) || 0;
+        switch (tx.type) {
+          case 'Income':
+            mutateAsset(estate, tx.accountId, +amt);
+            break;
+          case 'Expense':
+            mutateAsset(estate, tx.accountId, -amt);
+            break;
+          case 'Transfer':
+            mutateAsset(estate, tx.accountId, -amt);
+            if (tx.toAccountId && tx.toAccountId !== tx.accountId) {
+              mutateAsset(estate, tx.toAccountId, +amt);
+            }
+            break;
+          case 'Distribution':
+            mutateAsset(estate, tx.accountId, -amt);
+            break;
+          case 'Debt Payment':
+            mutateAsset(estate, tx.accountId, -amt);
+            mutateDebt(estate, tx.debtId, -amt);
+            break;
+          case 'Asset Sale':
+            mutateAsset(estate, tx.accountId, -amt);
+            if (tx.toAccountId && tx.toAccountId !== tx.accountId) {
+              mutateAsset(estate, tx.toAccountId, +amt);
+            }
+            break;
+          case 'Other':
+          default:
+            // No automatic balance updates for 'Other'.
+            break;
+        }
+      }
+      function revertTxFromEstate(tx, estate) {
+        if (!tx) return;
+        const amt = parseFloat(tx.amount) || 0;
+        // Legacy transfers-array fallbacks (only used to revert a prior version's effect).
+        if (Array.isArray(tx.transfers) && tx.transfers.length) {
+          for (const leg of tx.transfers) {
+            const sign = leg.direction === 'increase' ? 1 : -1;
+            const legAmt = parseFloat(leg.amount) || 0;
+            if (leg.itemType === 'asset') {
+              mutateAsset(estate, leg.itemId, -sign * legAmt);
+            } else if (leg.itemType === 'debt') {
+              mutateDebt(estate, leg.itemId, -sign * legAmt);
+            }
+          }
+          return;
+        }
+        switch (tx.type) {
+          case 'Income':
+            mutateAsset(estate, tx.accountId, -amt);
+            break;
+          case 'Expense':
+            mutateAsset(estate, tx.accountId, +amt);
+            break;
+          case 'Transfer':
+            mutateAsset(estate, tx.accountId, +amt);
+            if (tx.toAccountId && tx.toAccountId !== tx.accountId) {
+              mutateAsset(estate, tx.toAccountId, -amt);
+            }
+            break;
+          case 'Distribution':
+            mutateAsset(estate, tx.accountId, +amt);
+            break;
+          case 'Debt Payment':
+            mutateAsset(estate, tx.accountId, +amt);
+            mutateDebt(estate, tx.debtId, +amt);
+            break;
+          case 'Asset Sale':
+            mutateAsset(estate, tx.accountId, +amt);
+            if (tx.toAccountId && tx.toAccountId !== tx.accountId) {
+              mutateAsset(estate, tx.toAccountId, -amt);
+            }
+            break;
+          case 'Other':
+          default:
+            break;
+        }
+      }
+
+      // ---- Validation (warn on overpayment; require sub-pickers) ----
+      function validateBeforeSubmit(tx) {
+        setFormMessage('');
+        if (tx.type === 'Transfer' || tx.type === 'Asset Sale') {
+          if (!tx.toAccountId) return 'Please pick the destination Account.';
+          if (tx.toAccountId === tx.accountId) return 'From and To accounts must be different.';
+        }
+        if (tx.type === 'Debt Payment') {
+          if (!tx.debtId) return 'Please pick the Debt Being Paid.';
+          const estate = getCurrentEstate();
+          const d = getDebtById(estate, tx.debtId);
+          if (d) {
+            const remaining = parseFloat(d.balance) || 0;
+            if (tx.amount > remaining + 0.005) {
+              setFormMessage('<div class="alert alert-warning" style="margin-bottom:0.5rem;">This payment (' + App.UI.formatCurrency(tx.amount) +
+                ') exceeds the debt\'s remaining balance (' + App.UI.formatCurrency(remaining) +
+                '). The debt will be marked Paid and any excess will not be carried over.</div>');
+            }
+          }
+        }
+        if (tx.type === 'Distribution') {
+          if (!tx.heirId) return 'Please pick the Recipient.';
+          const estate = getCurrentEstate();
+          const a = getAssetById(estate, tx.accountId);
+          if (a && (parseFloat(a.value) || 0) < tx.amount - 0.005) {
+            setFormMessage('<div class="alert alert-warning" style="margin-bottom:0.5rem;">This distribution (' + App.UI.formatCurrency(tx.amount) +
+              ') exceeds the available balance of "' + App.UI.escapeHtml(a.name) + '" (' + App.UI.formatCurrency(a.value) +
+              '). The asset balance will be clamped to zero.</div>');
+          }
+        }
+        return null;
+      }
+
+      // ---- Running balance ----
+      // For new structure: type-driven impact on net cash position.
+      // For legacy tx.transfers array, the prior liquid-asset rule applies.
+      function getTxCashImpact(tx, estate) {
+        if (!tx) return 0;
+        const amt = parseFloat(tx.amount) || 0;
+        if (Array.isArray(tx.transfers) && tx.transfers.length) {
+          // Legacy multi-leg transaction.
+          let impact = 0;
+          for (const leg of tx.transfers) {
+            if (leg.itemType !== 'asset') continue;
+            const asset = getAssetById(estate, leg.itemId);
+            if (!asset || asset.category !== 'Bank Account') continue;
+            const sign = leg.direction === 'increase' ? 1 : -1;
+            impact += sign * (parseFloat(leg.amount) || 0);
+          }
+          return impact;
+        }
+        switch (tx.type) {
+          case 'Income':       return amt;
+          case 'Expense':      return -amt;
+          case 'Distribution': return -amt;
+          case 'Debt Payment': return -amt;
+          case 'Transfer':
+          case 'Asset Sale':
+          case 'Other':
+          default:             return 0;
+        }
+      }
+
+      // ---- Linked-cell text for table ----
+      function getLinkedCellText(tx, estate) {
+        if (Array.isArray(tx.transfers) && tx.transfers.length) {
+          return tx.transfers.map(leg => {
+            let label = leg.itemName || (leg.itemType === 'asset' ? 'Asset' : 'Debt');
+            if (leg.itemType === 'asset') {
+              const a = getAssetById(estate, leg.itemId);
+              if (a) label = a.name;
+            } else if (leg.itemType === 'debt') {
+              const d = getDebtById(estate, leg.itemId);
+              if (d) label = d.name;
+            }
+            const kind = leg.itemType === 'asset' ? 'Asset' : 'Debt';
+            return (leg.direction === 'increase' ? '↑' : '↓') + ' ' + kind + ' "' + label + '"';
+          }).join(' · ');
+        }
+        switch (tx.type) {
+          case 'Transfer': {
+            const from = getAssetById(estate, tx.accountId);
+            const to = getAssetById(estate, tx.toAccountId);
+            return '→ ' + App.UI.escapeHtml(to ? to.name : '(missing)') + ' from ' + App.UI.escapeHtml(from ? from.name : '(missing)');
+          }
+          case 'Asset Sale': {
+            const from = getAssetById(estate, tx.accountId);
+            const to = getAssetById(estate, tx.toAccountId);
+            return 'sold → ' + App.UI.escapeHtml(to ? to.name : '(missing)') + ', was ' + App.UI.escapeHtml(from ? from.name : '(missing)');
+          }
+          case 'Debt Payment': {
+            const d = getDebtById(estate, tx.debtId);
+            return 'paying ' + App.UI.escapeHtml(d ? d.name : '(deleted)');
+          }
+          case 'Distribution': {
+            const h = getHeirById(estate, tx.heirId);
+            return 'to ' + App.UI.escapeHtml(h ? h.name : '(deleted)');
+          }
+          case 'Other':
+            return '(no balance effect)';
+          default:
+            return '';
+        }
+      }
+
+      // ---- Account-name resolution for the Account column ----
+      function getAccountName(tx, estate) {
+        if (tx.accountId != null) {
+          const a = getAssetById(estate, tx.accountId);
+          if (a) return a.name;
+        }
+        if (typeof tx.account === 'string' && tx.account) return tx.account;
+        return '—';
+      }
+
+      // ---- Tabs ----
       let currentFilter = 'all';
       const tabs = document.querySelectorAll('.tab');
       tabs.forEach(tab => {
@@ -210,77 +558,111 @@
           renderCashflow();
         });
       });
+      function passesFilter(tx) {
+        if (currentFilter === 'all') return true;
+        if (currentFilter === 'income') return tx.type === 'Income';
+        if (currentFilter === 'expense') return tx.type === 'Expense';
+        if (currentFilter === 'transfers-sales') return tx.type === 'Transfer' || tx.type === 'Asset Sale';
+        if (currentFilter === 'payments-dists') return tx.type === 'Debt Payment' || tx.type === 'Distribution';
+        if (currentFilter === 'other') return tx.type === 'Other';
+        return true;
+      }
 
       function renderCashflow() {
         const estate = App.Data.getEstate();
         let cashflow = [...(estate.cashflow || [])];
         cashflow.sort((a, b) => new Date(a.date) - new Date(b.date));
+        const filtered = cashflow.filter(passesFilter);
 
-        let filtered = cashflow;
-        if (currentFilter === 'income') filtered = cashflow.filter(t => t.type === 'Income');
-        if (currentFilter === 'expense') filtered = cashflow.filter(t => t.type === 'Expense');
-
+        // Stats: Income/Expense count as before. Distribution & Debt Payment act like
+        // expenses for the bottom line (cash leaves the estate). Transfer/Asset Sale
+        // leave net cash position unchanged.
         const income = cashflow.filter(t => t.type === 'Income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-        const expenses = cashflow.filter(t => t.type === 'Expense').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+        const expenses = cashflow.filter(t =>
+          t.type === 'Expense' || t.type === 'Distribution' || t.type === 'Debt Payment'
+        ).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+        const transfersTotal = cashflow.filter(t =>
+          t.type === 'Transfer' || t.type === 'Asset Sale'
+        ).reduce((s, t) => s + getTxCashImpact(t, estate), 0);
+        const netCashflow = income - expenses + transfersTotal;
         document.getElementById('totalIncome').textContent = App.UI.formatCurrency(income);
         document.getElementById('totalExpenses').textContent = App.UI.formatCurrency(expenses);
-        document.getElementById('netCashflow').textContent = App.UI.formatCurrency(income - expenses);
+        document.getElementById('netCashflow').textContent = App.UI.formatCurrency(netCashflow);
         document.getElementById('txCount').textContent = cashflow.length;
 
         let running = 0;
         const tbody = document.querySelector('#cashflowTable tbody');
         tbody.innerHTML = filtered.map(t => {
-          running += t.type === 'Income' ? (parseFloat(t.amount) || 0) : -(parseFloat(t.amount) || 0);
-          const amountClass = t.type === 'Income' ? 'positive' : 'negative';
-          const sign = t.type === 'Income' ? '+' : '-';
+          const delta = getTxCashImpact(t, estate);
+          running += delta;
+          const amountClass = (delta > 0) ? 'positive' : (delta < 0 ? 'negative' : '');
+          const sign = delta > 0 ? '+' : (delta < 0 ? '-' : '');
+          const badgeClass = BADGE_BY_TYPE[t.type] || 'badge-default';
+          const account = getAccountName(t, estate);
+          const linked = getLinkedCellText(t, estate);
           return `<tr>
             <td>${App.UI.formatDate(t.date)}</td>
-            <td><span class="badge ${t.type === 'Income' ? 'badge-success' : 'badge-danger'}">${t.type}</span></td>
-            <td>${t.category}</td>
+            <td><span class="badge ${badgeClass}">${App.UI.escapeHtml(t.type)}</span></td>
+            <td>${App.UI.escapeHtml(t.category || '—')}</td>
             <td>${App.UI.escapeHtml(t.description)}</td>
-            <td>${t.account}</td>
+            <td>${App.UI.escapeHtml(account)}</td>
+            <td style="font-size:0.78rem; color:var(--text-secondary);">${linked}</td>
             <td style="text-align:right; font-weight:600;" class="${amountClass}">${sign}${App.UI.formatCurrency(t.amount)}</td>
             <td style="text-align:right; font-weight:500;">${App.UI.formatCurrency(running)}</td>
             <td class="edit-only no-print">
               <div class="btn-group">
-                <button class="btn btn-sm btn-secondary" onclick="editCashflow(${t.id})"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
-                <button class="btn btn-sm btn-danger" onclick="deleteCashflow(${t.id})"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg></button>
+                <button class="btn btn-sm btn-secondary" title="Edit" onclick="editCashflow(${t.id})"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
+                <button class="btn btn-sm btn-danger" title="Delete" onclick="deleteCashflow(${t.id})"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg></button>
               </div>
             </td>
           </tr>`;
         }).join('');
         if (filtered.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-secondary);">No transactions found.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:var(--text-secondary);">No transactions found.</td></tr>';
         }
       }
 
+      // ---- Modal open/save/delete ----
       window.openCashflowModal = function(id) {
         const estate = App.Data.getEstate();
         document.getElementById('cashflowForm').reset();
         document.getElementById('cfId').value = '';
         document.getElementById('cashflowModalTitle').textContent = 'Add Transaction';
+        clearFormMessages();
+
+        // Default the account to the first asset if nothing else set.
+        populateAssetDropdown('cfAccount', null);
+
+        let editing = null;
         if (id) {
           const t = estate.cashflow.find(x => x.id === id);
           if (t) {
+            editing = t;
             document.getElementById('cfId').value = t.id;
-            document.getElementById('cfDate').value = t.date;
-            document.getElementById('cfType').value = t.type;
-            document.getElementById('cfCategory').value = t.category;
-            document.getElementById('cfAmount').value = t.amount;
-            document.getElementById('cfDescription').value = t.description;
-            document.getElementById('cfAccount').value = t.account;
+            document.getElementById('cfDate').value = t.date || '';
+            document.getElementById('cfType').value = t.type || 'Income';
+            document.getElementById('cfAmount').value = (t.amount != null) ? t.amount : '';
+            document.getElementById('cfDescription').value = t.description || '';
             document.getElementById('cfCleared').value = t.cleared ? 'true' : 'false';
             document.getElementById('cashflowModalTitle').textContent = 'Edit Transaction';
           }
         }
+
+        // Populate field lists based on the chosen type.
+        populateCategoryDropdown(editing ? editing.category : null);
+        populateAssetDropdown('cfAccount', editing ? (editing.accountId != null ? editing.accountId : null) : null);
+        renderSubRow(editing);
+
         App.UI.openModal('cashflowModal');
       };
 
       window.editCashflow = function(id) { openCashflowModal(id); };
 
       window.deleteCashflow = function(id) {
-        if (!confirm('Are you sure you want to delete this transaction?')) return;
+        if (!confirm('Are you sure you want to delete this transaction? Any balance effects on assets or debts will be reversed.')) return;
         const estate = App.Data.getEstate();
+        const tx = estate.cashflow.find(t => t.id === id);
+        if (tx) revertTxFromEstate(tx, estate);
         estate.cashflow = estate.cashflow.filter(t => t.id !== id);
         App.Data.saveEstate(estate);
         renderCashflow();
@@ -289,22 +671,57 @@
       document.getElementById('cashflowForm').addEventListener('submit', (e) => {
         e.preventDefault();
         const estate = App.Data.getEstate();
-        const id = document.getElementById('cfId').value;
+        const idRaw = document.getElementById('cfId').value;
+        const type = document.getElementById('cfType').value;
+
         const tx = {
-          id: id ? parseInt(id) : App.Data.getNextId(estate.cashflow),
+          id: idRaw ? parseInt(idRaw) : App.Data.getNextId(estate.cashflow),
           date: document.getElementById('cfDate').value,
-          type: document.getElementById('cfType').value,
-          category: document.getElementById('cfCategory').value,
+          type,
+          category: document.getElementById('cfCategory').value || 'Other',
           amount: parseFloat(document.getElementById('cfAmount').value) || 0,
           description: document.getElementById('cfDescription').value,
-          account: document.getElementById('cfAccount').value,
+          accountId: parseInt(document.getElementById('cfAccount').value, 10) || null,
           cleared: document.getElementById('cfCleared').value === 'true'
         };
-        if (id) {
-          const idx = estate.cashflow.findIndex(t => t.id === parseInt(id));
-          if (idx >= 0) estate.cashflow[idx] = tx;
+
+        if (!tx.accountId) {
+          alert('Please pick the Account.');
+          return;
+        }
+
+        if (type === 'Transfer' || type === 'Asset Sale') {
+          const toIdRaw = document.getElementById('cfToAccountId') ? document.getElementById('cfToAccountId').value : '';
+          tx.toAccountId = toIdRaw ? parseInt(toIdRaw, 10) : null;
+        } else if (type === 'Debt Payment') {
+          const dIdRaw = document.getElementById('cfDebtId') ? document.getElementById('cfDebtId').value : '';
+          tx.debtId = dIdRaw ? parseInt(dIdRaw, 10) : null;
+        } else if (type === 'Distribution') {
+          const hIdRaw = document.getElementById('cfHeirId') ? document.getElementById('cfHeirId').value : '';
+          tx.heirId = hIdRaw ? parseInt(hIdRaw, 10) : null;
+        } else {
+          tx.toAccountId = null;
+          tx.debtId = null;
+          tx.heirId = null;
+        }
+
+        const validationError = validateBeforeSubmit(tx);
+        if (validationError) {
+          alert(validationError);
+          return;
+        }
+
+        if (idRaw) {
+          const idx = estate.cashflow.findIndex(t => t.id === parseInt(idRaw));
+          if (idx >= 0) {
+            const oldTx = estate.cashflow[idx];
+            revertTxFromEstate(oldTx, estate);
+            estate.cashflow[idx] = tx;
+            applyTxToEstate(tx, estate);
+          }
         } else {
           estate.cashflow.push(tx);
+          applyTxToEstate(tx, estate);
         }
         App.Data.saveEstate(estate);
         App.UI.closeModal('cashflowModal');
@@ -313,8 +730,25 @@
 
       window.exportCashflowCSV = function() {
         const estate = App.Data.getEstate();
-        App.Export.toCSV(estate.cashflow, 'estate-cashflow.csv');
+        const rows = (estate.cashflow || []).map(t => {
+          const flat = {
+            id: t.id,
+            date: t.date,
+            type: t.type,
+            category: t.category,
+            description: t.description,
+            account: getAccountName(t, estate),
+            toAccount: t.toAccountId ? (getAssetById(estate, t.toAccountId) ? getAssetById(estate, t.toAccountId).name : '') : '',
+            debt: t.debtId ? (getDebtById(estate, t.debtId) ? getDebtById(estate, t.debtId).name : '') : '',
+            heir: t.heirId ? (getHeirById(estate, t.heirId) ? getHeirById(estate, t.heirId).name : '') : '',
+            amount: t.amount,
+            cleared: t.cleared ? 'Yes' : 'No'
+          };
+          return flat;
+        });
+        App.Export.toCSV(rows, 'estate-cashflow.csv');
       };
+
       App.onReady(renderCashflow);
     })();
   </script>
