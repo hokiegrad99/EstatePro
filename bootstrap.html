@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EstatePro - Founder Bootstrap</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .bootstrap-card {
+      max-width: 480px;
+      width: 100%;
+    }
+    .bootstrap-warn {
+      background: var(--warning-light);
+      border: 1px solid var(--warning-color);
+      border-radius: var(--radius);
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.85rem;
+      color: var(--text-primary);
+    }
+    .bootstrap-warn strong { color: var(--warning-color); }
+    .bootstrap-help {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-top: 0.4rem;
+    }
+  </style>
+</head>
+<body class="login-page">
+  <div class="login-card bootstrap-card">
+    <div class="login-brand">
+      <div class="login-brand-icon">FB</div>
+      <h1>Founder Bootstrap</h1>
+      <p>EstatePro &mdash; create the very first estate</p>
+    </div>
+
+    <div id="authGateMessage" class="bootstrap-warn" style="display:none;">
+      You must <a href="index.html">sign in or register</a> first.
+    </div>
+
+    <div id="alreadyBootstrapped" class="bootstrap-warn" style="display:none;">
+      Your Firebase project already has one or more estates. The founder
+      bootstrap path is only for the <strong>very first</strong> estate.
+      Sign in and ask an existing executor to invite you instead.
+    </div>
+
+    <form id="bootstrapForm" class="form-section" style="display:none;">
+      <p style="margin-bottom:1rem; color:var(--text-secondary); font-size:0.9rem;">
+        Paste the founder secret you generated when you set up Firebase (see
+        <code>FIREBASE-SETUP.md</code>). The secret is never transmitted in
+        plaintext &mdash; it&rsquo;s SHA-256 hashed in your browser before the
+        request reaches Firestore.
+      </p>
+
+      <div class="form-group">
+        <label class="form-label" for="bootstrapEstateName">Estate name</label>
+        <input type="text" id="bootstrapEstateName" class="form-input"
+               placeholder="e.g., Smith Family Estate" required autocomplete="off">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="bootstrapSecret">Founder secret</label>
+        <input type="password" id="bootstrapSecret" class="form-input"
+               placeholder="Paste the secret you kept offline" required
+               autocomplete="off" autocapitalize="off" autocorrect="off"
+               spellcheck="false" style="font-family: monospace;">
+        <div class="bootstrap-help">
+          This is a long random string (e.g., 64 hex chars). After this bootstrap
+          you can delete it from your offline notes &mdash; the SHA-256 inside
+          <code>firestore.rules</code> is what gates create access.
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-lg"
+              style="width:100%; margin-top:0.5rem;">Create Estate</button>
+    </form>
+
+    <div id="bootstrapMessage" style="margin-top:1rem;"></div>
+  </div>
+
+  <!-- Firebase compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+
+  <!-- App config + bridge, then bootstrap page logic -->
+  <script src="js/firebase-config.js"></script>
+  <script src="js/firebase-bridge.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var authGateMessage   = document.getElementById('authGateMessage');
+      var alreadyMsg        = document.getElementById('alreadyBootstrapped');
+      var form              = document.getElementById('bootstrapForm');
+      var message           = document.getElementById('bootstrapMessage');
+
+      function showMsg(html, type) {
+        message.innerHTML = '<div class="alert alert-' + type + '">' + html + '</div>';
+      }
+
+      function sha256Hex(str) {
+        return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str))
+          .then(function (buf) {
+            return Array.from(new Uint8Array(buf))
+              .map(function (b) { return b.toString(16).padStart(2, '0'); })
+              .join('');
+          });
+      }
+
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+
+      if (!window.App || !window.App.Firebase) {
+        showMsg('Firebase is not configured. Edit <code>js/firebase-config.js</code> first.', 'danger');
+        return;
+      }
+
+      var auth = window.App.Firebase.auth;
+      var db   = window.App.Firebase.db;
+
+      auth.onAuthStateChanged(function (user) {
+        if (!user) {
+          authGateMessage.style.display = 'block';
+          form.style.display = 'none';
+          return;
+        }
+        authGateMessage.style.display = 'none';
+
+        // Cheap heuristic: if any estates already exist, refuse to show the form.
+        // We only need to read _one_ doc to know. Limit the query to one read.
+        db.collection('estates').limit(1).get()
+          .then(function (snap) {
+            if (!snap.empty) {
+              alreadyMsg.style.display = 'block';
+              form.style.display = 'none';
+              return;
+            }
+            form.style.display = 'block';
+          })
+          .catch(function (err) {
+            showMsg('Failed to query estates: ' + escapeHtml(err.message || err), 'danger');
+          });
+      });
+
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var user = auth.currentUser;
+        if (!user) {
+          showMsg('You must be signed in.', 'danger');
+          return;
+        }
+        var estateName = document.getElementById('bootstrapEstateName').value.trim();
+        var secret     = document.getElementById('bootstrapSecret').value;
+        if (!estateName || !secret) {
+          showMsg('Estate name and founder secret are both required.', 'danger');
+          return;
+        }
+
+        var submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Creating estate...';
+        showMsg('Hashing secret and submitting to Firestore...', 'info');
+
+        try {
+          var hex = await sha256Hex(secret);
+          var now = new Date().toISOString();
+          var estateDoc = {
+            name: estateName,
+            memberIds: [user.uid],
+            pendingInvites: {},
+            decedent: {},
+            executor: {},
+            tasks: [],
+            assets: [],
+            debts: [],
+            cashflow: [],
+            heirs: [],
+            distributions: [],
+            updatedAt: now,
+            createdAt: now,
+            createdBy: user.uid,
+            __founderSecret: hex
+          };
+          // Firestore map keys must be strings; we use the literal uid below.
+          estateDoc.roles = {};
+          estateDoc.roles[user.uid] = 'executor';
+
+          var ref = db.collection('estates').doc();
+          await ref.set(estateDoc);
+
+          showMsg(
+            '<strong>Estate "' + escapeHtml(estateName) + '" created!</strong><br>' +
+            'You are now its Executor. <br><br>' +
+            '<a class="btn btn-primary" href="dashboard.html">Go to Dashboard</a>',
+            'success'
+          );
+
+          // Stash a "last bootstrapped" hint in sessionStorage so a future
+          // revisit sees we already bootstrapped and doesn't show the form.
+          try { sessionStorage.setItem('estatepro_last_bootstrapped', now); } catch (e) {}
+
+          // Optional: clear the secret field
+          document.getElementById('bootstrapSecret').value = '';
+        } catch (err) {
+          console.error('bootstrap create failed', err);
+          var msg = err && err.message ? err.message : String(err);
+          if (/permission/i.test(msg)) {
+            msg = 'Permission denied. The SHA-256 of the secret you entered does ' +
+                  'not match the constant in firestore.rules. Re-check you typed ' +
+                  'the secret correctly, and confirm your hash constant in ' +
+                  'firestore.rules has been deployed.';
+          }
+          showMsg('Failed: ' + escapeHtml(msg), 'danger');
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Create Estate';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

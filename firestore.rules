@@ -1,0 +1,77 @@
+rules_version = '2';
+
+// =============================================================================
+// EstatePro — Phase 1 Security Rules
+// =============================================================================
+// These rules are deployed to Firebase (not served from GitHub Pages), so it's
+// safe to embed the founder-secret hash here.
+//
+// Phase 1 scope:
+//   - users/{uid}: read/write only your own profile
+//   - estates/{id}.read: only members (any role)
+//   - estates/{id}.create: only via founder-bootstrap path (secret hash match)
+//
+// NOT in this phase (Phase 2/4):
+//   - estates/{id}.update (executor writes)         -> Phase 2
+//   - estates/{id}.update (invite consumption)      -> Phase 4
+//   - estates/{id}.delete                           -> Phase 4
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- helpers ----
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function isMember(estateId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/estates/$(estateId))
+        && request.auth.uid in get(/databases/$(database)/documents/estates/$(estateId)).data.memberIds;
+    }
+
+    // ---- users/{userId} ----
+    // Each user can read and write only their own profile doc.
+    match /users/{userId} {
+      allow read, write: if isSelf(userId);
+
+      // Initial profile create must include email; further writes are ruled as
+      // above (any field changes by self).
+      allow create: if isSelf(userId)
+        && request.resource.data.email is string;
+    }
+
+    // ---- estates/{estateId} ----
+    // Phase 1: only "read if member" + "create via founder-bootstrap".
+    match /estates/{estateId} {
+      allow read: if isMember(estateId);
+
+      // Founder bootstrap path. Caller must:
+      //   1. Be signed in.
+      //   2. Pass __founderSecret as a 64-char hex string (SHA-256).
+      //   3. The hex must match the constant pinned below.
+      //   4. Make themselves the only member and assign themselves executor.
+      //   5. Start with an empty pendingInvites map.
+      //
+      // The constant below is the SHA-256 hex of YOUR secret. See FIREBASE-SETUP.md.
+      // Do NOT use the placeholder below — replace it before deploying.
+      allow create: if isSignedIn()
+        && '__founderSecret' in request.resource.data
+        && request.resource.data.__founderSecret is string
+        && request.resource.data.__founderSecret.size() == 64
+        && request.resource.data.__founderSecret
+              == '4473143dc63f754c10f105c8cda97d119c3bb95cce7b50ae0cebc7cb00594175'
+        && request.resource.data.memberIds.size() == 1
+        && request.resource.data.memberIds[0] == request.auth.uid
+        && request.resource.data.roles[request.auth.uid] == 'executor'
+        && request.resource.data.pendingInvites.size() == 0;
+
+      // Phase 2+ will add: allow update for executors, allow update for invite consumption.
+      // Phase 4 will add: allow delete for executors.
+      allow update, delete: if false;
+    }
+  }
+}

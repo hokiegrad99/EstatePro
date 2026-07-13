@@ -8,296 +8,171 @@ const App = {
      AUTHENTICATION
      ============================ */
   Auth: {
-    async hashPassword(password) {
-      if (!App.Crypto._hasSubtle()) {
-        const hash = await App.Crypto._sha256Fallback(password);
-        return `$fallback$SHA-256$${hash}`;
-      }
-      const encoder = new TextEncoder();
-      const salt = crypto.getRandomValues(new Uint8Array(16));
-      const keyMaterial = await crypto.subtle.importKey(
-        'raw', encoder.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']
-      );
-      const derived = await crypto.subtle.deriveBits(
-        { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-        keyMaterial, 256
-      );
-      const saltB64 = App.Crypto._arrayBufferToBase64(salt);
-      const hashB64 = App.Crypto._arrayBufferToBase64(derived);
-      return `$pbkdf2$SHA-256$100000$${saltB64}$${hashB64}`;
+    // Firebase Auth-backed wrapper for EstatePro.
+    // Phase 1 scope: register, login, logout, session check, getMyEstates.
+    _currentUser: null,
+    _ready: false,
+    _stateListeners: [],
+
+    init() {
+      // Hook the auth-state listener once at app boot. Use `var self` so the
+      // callback's `this` does not need rebinding; the inner handler then
+      // delegates to a real method on `this`.
+      var self = this;
+      firebase.auth().onAuthStateChanged(function (user) {
+        self._handleAuthUser(user);
+      });
     },
 
-    async verifyPassword(password, storedHash) {
-      if (!storedHash) return { valid: false };
-      // Legacy SHA-256 hash (64 hex chars, no prefix)
-      if (/^[0-9a-f]{64}$/i.test(storedHash)) {
-        let hashHex;
-        if (App.Crypto._hasSubtle()) {
-          const encoder = new TextEncoder();
-          const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(password));
-          hashHex = Array.from(new Uint8Array(hashBuffer))
-            .map(b => b.toString(16).padStart(2, '0')).join('');
-        } else {
-          hashHex = await App.Crypto._sha256Fallback(password);
-        }
-        return { valid: hashHex === storedHash.toLowerCase(), legacy: true };
-      }
-      // Fallback hash (when crypto.subtle is unavailable)
-      if (storedHash.startsWith('$fallback$')) {
-        const parts = storedHash.split('$');
-        if (parts.length !== 3) return { valid: false };
-        const expectedHash = parts[2];
-        const hash = await App.Crypto._sha256Fallback(password);
-        return { valid: hash === expectedHash, legacy: false, fallback: true };
-      }
-      // PBKDF2 hash
-      if (storedHash.startsWith('$pbkdf2$')) {
-        const parts = storedHash.split('$');
-        if (parts.length !== 6) return { valid: false };
-        const algo = parts[2];
-        const iterations = parseInt(parts[3], 10);
-        if (isNaN(iterations) || iterations < 1) return { valid: false };
-        const salt = App.Crypto._base64ToArrayBuffer(parts[4]);
-        const expectedHash = parts[5];
-        const encoder = new TextEncoder();
-        const keyMaterial = await crypto.subtle.importKey(
-          'raw', encoder.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']
-        );
-        const derived = await crypto.subtle.deriveBits(
-          { name: 'PBKDF2', salt, iterations, hash: algo },
-          keyMaterial, 256
-        );
-        const derivedB64 = App.Crypto._arrayBufferToBase64(derived);
-        return { valid: derivedB64 === expectedHash, legacy: false };
-      }
-      return { valid: false };
+    async _handleAuthUser(user) {
+      this._currentUser = user ? await this._hydrateProfile(user) : null;
+      this._ready = true;
+      this._stateListeners.forEach(function (cb) {
+        try { cb(this._currentUser); } catch (e) { console.error(e); }
+      });
     },
 
-    async init() {
-      if (App.Crypto.isEncryptionEnabled() && !App.Crypto.hasPassphrase()) {
-        return;
-      }
+    async _hydrateProfile(firebaseUser) {
       try {
-        const users = await App.Crypto.readStorage('estatepro_users');
-        if (!users || users.length === 0) {
-          const hashedAdmin = await this.hashPassword('admin');
-          const hashedExec = await this.hashPassword('executor');
-          const hashedHeir = await this.hashPassword('heir');
-          const hashedBen = await this.hashPassword('beneficiary');
-          const defaultUsers = [
-            { id: 1, username: 'admin', password: hashedAdmin, name: 'System Admin', role: 'Admin', email: 'admin@estatepro.local' },
-            { id: 2, username: 'executor', password: hashedExec, name: 'Michael Johnson', role: 'Executor', email: 'michael@email.com' },
-            { id: 3, username: 'heir', password: hashedHeir, name: 'Sarah Johnson', role: 'Heir', email: 'sarah@email.com' },
-            { id: 4, username: 'beneficiary', password: hashedBen, name: 'David Johnson', role: 'Beneficiary', email: 'david@email.com' }
-          ];
-          this._usersCache = defaultUsers;
-          await App.Crypto.writeStorage('estatepro_users', defaultUsers);
-        } else {
-          this._usersCache = users;
-        }
+        var ref = App.Firebase.db.collection('users').doc(firebaseUser.uid);
+        var snap = await ref.get();
+        var profile = snap.exists ? snap.data() : null;
+        return {
+          uid: firebaseUser.uid,
+          id: firebaseUser.uid,
+          email: firebaseUser.email,
+          name: (profile && profile.displayName) || firebaseUser.displayName || firebaseUser.email,
+          role: null,
+          displayName: (profile && profile.displayName) || '',
+          createdAt: (profile && profile.createdAt) || null
+        };
       } catch (e) {
-        console.error('Auth.init failed:', e);
-        this._usersCache = [];
+        console.warn('Could not hydrate user profile:', e);
+        return {
+          uid: firebaseUser.uid,
+          id: firebaseUser.uid,
+          email: firebaseUser.email,
+          name: firebaseUser.displayName || firebaseUser.email,
+          role: null,
+          displayName: firebaseUser.displayName || '',
+          createdAt: null
+        };
       }
     },
 
-    getUsers() {
-      if (this._usersCache) return this._usersCache;
+    onAuthStateChanged(cb) {
+      if (typeof cb !== 'function') return;
+      this._stateListeners.push(cb);
+      if (this._ready) cb(this._currentUser);
+    },
+
+    async register(opts) {
+      // New signature: register({email, password, name})
+      var email = (opts && opts.email) || '';
+      var password = (opts && opts.password) || '';
+      var name = (opts && opts.name) || '';
       try {
-        const raw = localStorage.getItem('estatepro_users');
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.ct && parsed.algo) {
-          return [];
+        var cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
+        if (name) {
+          await cred.user.updateProfile({ displayName: name });
         }
-        return parsed || [];
-      } catch (e) { return []; }
+        await App.Firebase.db.collection('users').doc(cred.user.uid).set({
+          email: email,
+          displayName: name || '',
+          createdAt: new Date().toISOString()
+        });
+        return { success: true, message: 'Account created successfully.' };
+      } catch (err) {
+        return { success: false, message: this._formatAuthError(err) };
+      }
     },
 
-    saveUsers(users) {
-      this._usersCache = users;
-      return App.Crypto.writeStorage('estatepro_users', users).catch(err => console.error('Failed to save users:', err));
+    async login(email, password) {
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+        return { success: true, message: 'Login successful.' };
+      } catch (err) {
+        return { success: false, message: this._formatAuthError(err) };
+      }
     },
 
-    async register(username, password, name, role, email) {
-      const users = this.getUsers();
-      if (users.find(u => u.username === username)) {
-        return { success: false, message: 'Username already exists.' };
-      }
-      const hashedPassword = await this.hashPassword(password);
-      const newUser = {
-        id: Date.now(),
-        username,
-        password: hashedPassword,
-        name,
-        role,
-        email
-      };
-      users.push(newUser);
-      this.saveUsers(users);
-      return { success: true, message: 'Account created successfully.' };
-    },
-
-    async login(username, password) {
-      const users = this.getUsers();
-      const user = users.find(u => u.username === username);
-      if (!user) {
-        return { success: false, message: 'Invalid username or password.' };
-      }
-      const verify = await this.verifyPassword(password, user.password);
-      if (!verify.valid) {
-        return { success: false, message: 'Invalid username or password.' };
-      }
-      // Migrate legacy SHA-256 or fallback hash to PBKDF2 on successful login
-      if ((verify.legacy || verify.fallback) && App.Crypto._hasSubtle()) {
-        user.password = await this.hashPassword(password);
-        await this.saveUsers(users);
-      }
-      const session = { id: user.id, username: user.username, name: user.name, role: user.role, email: user.email };
-      localStorage.setItem('estatepro_session', JSON.stringify(session));
-      App.Crypto.savePassphraseToSession();
-      return { success: true, message: 'Login successful.' };
-    },
-
-    logout() {
-      App.Crypto.clearPassphraseFromSession();
-      App.Crypto.clearKeyCache();
-      localStorage.removeItem('estatepro_session');
+    async logout() {
+      try { await firebase.auth().signOut(); }
+      catch (e) { console.error('logout error:', e); }
       window.location.href = 'index.html';
     },
 
     getCurrentUser() {
-      try { return JSON.parse(localStorage.getItem('estatepro_session')); }
-      catch (e) { return null; }
+      // Synchronous fallback: if _hydrateProfile hasn't finished yet, we still
+      // have the raw Firebase user available via firebase.auth().currentUser.
+      if (this._currentUser) return this._currentUser;
+      var u = firebase.auth().currentUser;
+      if (!u) return null;
+      return {
+        uid: u.uid,
+        id: u.uid,
+        email: u.email,
+        name: u.displayName || u.email,
+        displayName: u.displayName || '',
+        role: null,
+        createdAt: null
+      };
     },
 
     checkSession() {
-      const user = this.getCurrentUser();
-      if (!user) {
+      var u = this.getCurrentUser();
+      if (!u) {
         window.location.href = 'index.html';
         return null;
       }
-      return user;
+      return u;
     },
 
     isLoggedIn() {
       return !!this.getCurrentUser();
     },
 
-    async updateUserRole(userId, newRole) {
-      const users = this.getUsers();
-      const user = users.find(u => u.id === userId);
-      if (!user) {
-        return { success: false, message: 'User not found.' };
-      }
-      const currentUser = this.getCurrentUser();
-      if (currentUser && currentUser.id === userId) {
-        return { success: false, message: 'You cannot change your own role.' };
-      }
-      const allowedRoles = ['Admin', 'Executor', 'Heir', 'Beneficiary'];
-      if (!allowedRoles.includes(newRole)) {
-        return { success: false, message: 'Invalid role.' };
-      }
-      // Prevent removing the last admin
-      if (user.role === 'Admin' && newRole !== 'Admin') {
-        const adminCount = users.filter(u => u.role === 'Admin').length;
-        if (adminCount <= 1) {
-          return { success: false, message: 'Cannot remove the last admin.' };
-        }
-      }
-      user.role = newRole;
-      this.saveUsers(users);
-      return { success: true, message: 'User role updated successfully.' };
+    async getMyEstates() {
+      var u = this.getCurrentUser();
+      if (!u) return [];
+      var snap = await App.Firebase.db.collection('estates')
+        .where('memberIds', 'array-contains', u.uid).get();
+      return snap.docs.map(function (d) {
+        var data = d.data();
+        delete data.__founderSecret;
+        return { id: d.id, _doc: data };
+      });
     },
 
-    async deleteUser(userId) {
-      const users = this.getUsers();
-      const user = users.find(u => u.id === userId);
-      if (!user) {
-        return { success: false, message: 'User not found.' };
-      }
-      const currentUser = this.getCurrentUser();
-      if (currentUser && currentUser.id === userId) {
-        return { success: false, message: 'You cannot delete your own account.' };
-      }
-      if (user.role === 'Admin') {
-        return { success: false, message: 'Admin accounts cannot be deleted.' };
-      }
-      const newUsers = users.filter(u => u.id !== userId);
-      this.saveUsers(newUsers);
-      return { success: true, message: 'User deleted successfully.' };
-    },
-
-    async resetUserPassword(userId, newPassword) {
-      const users = this.getUsers();
-      const user = users.find(u => u.id === userId);
-      if (!user) {
-        return { success: false, message: 'User not found.' };
-      }
-      const hashedPassword = await this.hashPassword(newPassword);
-      user.password = hashedPassword;
-      this.saveUsers(users);
-      return { success: true, message: 'Password reset successfully.' };
-    },
-
+    // ---- Compatibility stubs for legacy callers (Sync export, users.html) ----
+    // Phase 1 does not back the users list yet. These return safe values so
+    // legacy pages don't crash; they are no-ops for new functionality.
+    getUsers() { return []; },
+    saveUsers() { return Promise.resolve(); },
     async restoreDefaultUsers() {
-      const hashedAdmin = await this.hashPassword('admin');
-      const hashedExec = await this.hashPassword('executor');
-      const hashedHeir = await this.hashPassword('heir');
-      const hashedBen = await this.hashPassword('beneficiary');
-      const defaultUsers = [
-        { id: 1, username: 'admin', password: hashedAdmin, name: 'System Admin', role: 'Admin', email: 'admin@estatepro.local' },
-        { id: 2, username: 'executor', password: hashedExec, name: 'Michael Johnson', role: 'Executor', email: 'michael@email.com' },
-        { id: 3, username: 'heir', password: hashedHeir, name: 'Sarah Johnson', role: 'Heir', email: 'sarah@email.com' },
-        { id: 4, username: 'beneficiary', password: hashedBen, name: 'David Johnson', role: 'Beneficiary', email: 'david@email.com' }
-      ];
-      // Merge: keep existing users, only overwrite default usernames
-      const existing = this.getUsers();
-      const existingMap = new Map(existing.map(u => [u.username, u]));
-      defaultUsers.forEach(u => existingMap.set(u.username, u));
-      this.saveUsers(Array.from(existingMap.values()));
-      return { success: true, message: 'Default users restored. You can now sign in with admin/admin.' };
+      return { success: false, message: 'Demo defaults are removed in this build. Sign up via the Register form.' };
     },
+    async updateUserRole() { return { success: false, message: 'Per-user roles are not used in Phase 1. Use estate memberships in Phase 4.' }; },
+    async deleteUser() { return { success: false, message: 'Not available in Phase 1.' }; },
+    async resetUserPassword() { return { success: false, message: 'Use the Firebase Auth "reset password" flow instead.' }; },
+    async promoteSelfToAdmin() { return { success: false, message: 'Per-estate roles are managed via invites in Phase 4.' }; },
+    async changeOwnPassword() { return { success: false, message: 'Use the Firebase Auth change-password flow (Profile menu).' }; },
 
-    async promoteSelfToAdmin() {
-      const currentUser = this.getCurrentUser();
-      if (!currentUser) {
-        return { success: false, message: 'You must be logged in.' };
+    _formatAuthError(err) {
+      if (!err || !err.code) return (err && err.message) || 'Unknown error.';
+      switch (err.code) {
+        case 'auth/email-already-in-use':    return 'An account with this email already exists.';
+        case 'auth/invalid-email':           return 'Please enter a valid email address.';
+        case 'auth/user-disabled':           return 'This account has been disabled.';
+        case 'auth/user-not-found':          return 'No account found for that email.';
+        case 'auth/wrong-password':          return 'Incorrect password.';
+        case 'auth/weak-password':           return 'Password must be at least 6 characters.';
+        case 'auth/invalid-credential':      return 'Invalid email or password.';
+        case 'auth/missing-password':        return 'Please enter a password.';
+        case 'auth/too-many-requests':       return 'Too many attempts. Try again later.';
+        case 'auth/network-request-failed':  return 'Network error. Check your connection and try again.';
+        default: return err.message || 'Authentication failed.';
       }
-      const users = this.getUsers();
-      const user = users.find(u => u.id === currentUser.id);
-      if (!user) {
-        return { success: false, message: 'User not found.' };
-      }
-      if (user.role === 'Admin') {
-        return { success: false, message: 'You are already an Admin.' };
-      }
-      user.role = 'Admin';
-      await this.saveUsers(users);
-      // Update session so permissions apply immediately
-      const session = { ...currentUser, role: 'Admin' };
-      localStorage.setItem('estatepro_session', JSON.stringify(session));
-      return { success: true, message: 'Your account has been promoted to Admin.' };
-    },
-
-    async changeOwnPassword(currentPassword, newPassword) {
-      const currentUser = this.getCurrentUser();
-      if (!currentUser) {
-        return { success: false, message: 'You must be logged in to change your password.' };
-      }
-      const users = this.getUsers();
-      const user = users.find(u => u.id === currentUser.id);
-      if (!user) {
-        return { success: false, message: 'User not found.' };
-      }
-      const verify = await this.verifyPassword(currentPassword, user.password);
-      if (!verify.valid) {
-        return { success: false, message: 'Current password is incorrect.' };
-      }
-      const hashedNew = await this.hashPassword(newPassword);
-      user.password = hashedNew;
-      this.saveUsers(users);
-      return { success: true, message: 'Password changed successfully.' };
     }
   },
 
@@ -2053,6 +1928,13 @@ App.init = async function() {
     await this.Crypto.init();
   } catch (e) {
     console.error('Crypto.init failed during App.init:', e);
+  }
+  // Wire App.Auth.init directly so the auth-state listener always starts,
+  // independent of Crypto.init's passphrase-prompt branch.
+  try {
+    this.Auth.init();
+  } catch (e) {
+    console.error('Auth.init failed during App.init:', e);
   }
   this.UI.init();
 };

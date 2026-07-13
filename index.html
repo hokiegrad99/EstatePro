@@ -11,30 +11,29 @@
     <div class="login-brand">
       <div class="login-brand-icon">EP</div>
       <h1>EstatePro</h1>
-      <p>Estate Executor & Administration Manager</p>
+      <p>Estate Executor &amp; Administration Manager</p>
     </div>
 
     <!-- Login Form -->
     <form id="loginForm" class="form-section">
       <div class="form-group">
-        <label class="form-label" for="loginUsername">Username</label>
-        <input type="text" id="loginUsername" class="form-input" placeholder="Enter your username" required autocomplete="username">
+        <label class="form-label" for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" class="form-input"
+               placeholder="Enter your email" required autocomplete="email">
       </div>
       <div class="form-group">
         <label class="form-label" for="loginPassword">Password</label>
-        <input type="password" id="loginPassword" class="form-input" placeholder="Enter your password" required autocomplete="current-password">
+        <input type="password" id="loginPassword" class="form-input"
+               placeholder="Enter your password" required
+               autocomplete="current-password">
       </div>
-      <button type="submit" class="btn btn-primary btn-lg" style="width:100%; margin-top:0.5rem;">Sign In</button>
+      <button type="submit" class="btn btn-primary btn-lg"
+              style="width:100%; margin-top:0.5rem;">Sign In</button>
       <div class="login-toggle">
         Don't have an account? <a id="showRegister">Register</a>
       </div>
-      <div style="margin-top:1rem; padding:0.75rem; background:var(--bg-primary); border-radius:var(--radius); font-size:0.8rem; color:var(--text-secondary);">
-        <strong>Demo Credentials:</strong><br>
-        admin / admin &nbsp;|&nbsp; executor / executor<br>
-        heir / heir &nbsp;|&nbsp; beneficiary / beneficiary
-      </div>
-      <div style="margin-top:0.75rem; text-align:center;">
-        <button type="button" id="restoreDefaultsBtn" class="btn btn-sm btn-secondary" style="font-size:0.75rem;">Restore Demo Defaults (admin, executor, heir, beneficiary)</button>
+      <div class="login-toggle" style="margin-top:0.5rem;">
+        <a id="forgotPasswordLink" href="#">Forgot password?</a>
       </div>
     </form>
 
@@ -42,119 +41,182 @@
     <form id="registerForm" class="form-section" style="display:none;">
       <div class="form-group">
         <label class="form-label" for="regName">Full Name</label>
-        <input type="text" id="regName" class="form-input" placeholder="Enter your full name" required autocomplete="name">
+        <input type="text" id="regName" class="form-input"
+               placeholder="Enter your full name" required autocomplete="name">
       </div>
       <div class="form-group">
         <label class="form-label" for="regEmail">Email</label>
-        <input type="email" id="regEmail" class="form-input" placeholder="Enter your email" required autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="regUsername">Username</label>
-        <input type="text" id="regUsername" class="form-input" placeholder="Choose a username" required autocomplete="username">
+        <input type="email" id="regEmail" class="form-input"
+               placeholder="Enter your email" required autocomplete="email">
       </div>
       <div class="form-group">
         <label class="form-label" for="regPassword">Password</label>
-        <input type="password" id="regPassword" class="form-input" placeholder="Choose a password" required autocomplete="new-password">
+        <input type="password" id="regPassword" class="form-input"
+               placeholder="Choose a password (at least 6 characters)" required
+               autocomplete="new-password">
       </div>
       <div class="form-group">
         <label class="form-label" for="regPasswordConfirm">Confirm Password</label>
-        <input type="password" id="regPasswordConfirm" class="form-input" placeholder="Confirm your password" required autocomplete="new-password">
+        <input type="password" id="regPasswordConfirm" class="form-input"
+               placeholder="Confirm your password" required
+               autocomplete="new-password">
       </div>
-      <div class="form-group">
-        <label class="form-label" for="regRole">Role</label>
-        <select id="regRole" class="form-select" required>
-          <option value="">Select a role...</option>
-          <option value="Admin">Admin</option>
-          <option value="Executor">Executor</option>
-          <option value="Heir">Heir</option>
-          <option value="Beneficiary">Beneficiary</option>
-        </select>
-      </div>
-      <button type="submit" class="btn btn-primary btn-lg" style="width:100%; margin-top:0.5rem;">Create Account</button>
+      <button type="submit" class="btn btn-primary btn-lg"
+              style="width:100%; margin-top:0.5rem;">Create Account</button>
       <div class="login-toggle">
         Already have an account? <a id="showLogin">Sign In</a>
       </div>
     </form>
 
     <div id="authMessage"></div>
+
+    <div id="bootstrapHint" style="display:none; margin-top:1rem; padding:0.75rem;
+         background:var(--info-light); border:1px solid var(--info-color);
+         border-radius:var(--radius); font-size:0.85rem; color:var(--text-primary);">
+      <strong>Signed in but you have no estate yet?</strong><br>
+      Visit <a href="bootstrap.html">bootstrap.html</a> to create the very first one
+      (founder only).
+    </div>
   </div>
 
+  <!-- Firebase compat SDK (must load before firebase-bridge.js) -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+
+  <!-- App Firebase config (user-edited) and bridge, then main app -->
+  <script src="js/firebase-config.js"></script>
+  <script src="js/firebase-bridge.js"></script>
   <script src="js/app.js"></script>
+
   <script>
-    (function() {
-      // Redirect if already logged in
+    (function () {
+      'use strict';
+
+      var loginForm    = document.getElementById('loginForm');
+      var registerForm = document.getElementById('registerForm');
+      var showRegister = document.getElementById('showRegister');
+      var showLogin    = document.getElementById('showLogin');
+      var forgotLink   = document.getElementById('forgotPasswordLink');
+      var authMessage  = document.getElementById('authMessage');
+      var bootstrapHint = document.getElementById('bootstrapHint');
+
+      function showMsg(html, type) {
+        authMessage.innerHTML = '<div class="alert alert-' + type + '">' +
+          App.UI.escapeHtml(html) + '</div>';
+      }
+
+      // If already signed in, route to the dashboard (or the bootstrap hint).
       if (App.Auth.isLoggedIn()) {
         window.location.href = 'dashboard.html';
         return;
       }
 
-      const loginForm = document.getElementById('loginForm');
-      const registerForm = document.getElementById('registerForm');
-      const showRegister = document.getElementById('showRegister');
-      const showLogin = document.getElementById('showLogin');
-      const authMessage = document.getElementById('authMessage');
-
-      showRegister.addEventListener('click', (e) => {
+      showRegister.addEventListener('click', function (e) {
         e.preventDefault();
         loginForm.style.display = 'none';
         registerForm.style.display = 'block';
         authMessage.innerHTML = '';
       });
 
-      showLogin.addEventListener('click', (e) => {
+      showLogin.addEventListener('click', function (e) {
         e.preventDefault();
         registerForm.style.display = 'none';
         loginForm.style.display = 'block';
         authMessage.innerHTML = '';
       });
 
-      loginForm.addEventListener('submit', async (e) => {
+      loginForm.addEventListener('submit', async function (e) {
         e.preventDefault();
-        const username = document.getElementById('loginUsername').value.trim();
-        const password = document.getElementById('loginPassword').value;
-        const result = await App.Auth.login(username, password);
+        var email = document.getElementById('loginEmail').value.trim();
+        var password = document.getElementById('loginPassword').value;
+        if (!email || !password) {
+          showMsg('Please enter your email and password.', 'danger');
+          return;
+        }
+        var submitBtn = loginForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true; submitBtn.textContent = 'Signing in...';
+        var result = await App.Auth.login(email, password);
+        submitBtn.disabled = false; submitBtn.textContent = 'Sign In';
         if (result.success) {
           window.location.href = 'dashboard.html';
         } else {
-          authMessage.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(result.message) + '</div>';
+          showMsg(result.message, 'danger');
         }
       });
 
-      registerForm.addEventListener('submit', async (e) => {
+      registerForm.addEventListener('submit', async function (e) {
         e.preventDefault();
-        const name = document.getElementById('regName').value.trim();
-        const email = document.getElementById('regEmail').value.trim();
-        const username = document.getElementById('regUsername').value.trim();
-        const password = document.getElementById('regPassword').value;
-        const confirmPassword = document.getElementById('regPasswordConfirm').value;
-        const role = document.getElementById('regRole').value;
-        if (password !== confirmPassword) {
-          authMessage.innerHTML = '<div class="alert alert-danger">Passwords do not match.</div>';
+        var name  = document.getElementById('regName').value.trim();
+        var email = document.getElementById('regEmail').value.trim();
+        var password = document.getElementById('regPassword').value;
+        var confirm  = document.getElementById('regPasswordConfirm').value;
+        if (!name || !email || !password) {
+          showMsg('All fields are required.', 'danger');
+          return;
+        }
+        if (password !== confirm) {
+          showMsg('Passwords do not match.', 'danger');
           return;
         }
         if (password.length < 6) {
-          authMessage.innerHTML = '<div class="alert alert-danger">Password must be at least 6 characters.</div>';
+          showMsg('Password must be at least 6 characters.', 'danger');
           return;
         }
-        if (!role) {
-          authMessage.innerHTML = '<div class="alert alert-danger">Please select a role.</div>';
-          return;
-        }
-        const result = await App.Auth.register(username, password, name, role, email);
+        var submitBtn = registerForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true; submitBtn.textContent = 'Creating...';
+        var result = await App.Auth.register({ email: email, password: password, name: name });
+        submitBtn.disabled = false; submitBtn.textContent = 'Create Account';
         if (result.success) {
-          authMessage.innerHTML = '<div class="alert alert-success">' + App.UI.escapeHtml(result.message) + ' Please sign in.</div>';
+          showMsg(result.message + ' Please sign in.', 'success');
           registerForm.style.display = 'none';
           loginForm.style.display = 'block';
+          // Pre-fill the email so the user just types their password.
+          document.getElementById('loginEmail').value = email;
         } else {
-          authMessage.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(result.message) + '</div>';
+          showMsg(result.message, 'danger');
         }
       });
 
-      document.getElementById('restoreDefaultsBtn').addEventListener('click', async () => {
-        if (!confirm('Restore default demo accounts (admin, executor, heir, beneficiary)? Any existing accounts with the same username will be overwritten. Your custom accounts and estate data will be preserved.')) return;
-        const result = await App.Auth.restoreDefaultUsers();
-        authMessage.innerHTML = '<div class="alert alert-' + (result.success ? 'success' : 'danger') + '">' + App.UI.escapeHtml(result.message) + '</div>';
-      });
+      if (forgotLink) {
+        forgotLink.addEventListener('click', function (e) {
+          e.preventDefault();
+          var email = document.getElementById('loginEmail').value.trim();
+          if (!email) {
+            showMsg('Enter your email above first, then click "Forgot password?".', 'info');
+            return;
+          }
+          if (!window.App || !window.App.Firebase || !window.firebase) {
+            showMsg('Firebase is not configured.', 'danger');
+            return;
+          }
+          firebase.auth().sendPasswordResetEmail(email)
+            .then(function () {
+              showMsg('Password reset email sent to ' + email + '.', 'success');
+            })
+            .catch(function (err) {
+              showMsg(err.message || 'Failed to send reset email.', 'danger');
+            });
+        });
+      }
+
+      // If the user signs in but has no estates, surface the bootstrap hint.
+      if (window.App && window.App.Firebase && window.firebase) {
+        firebase.auth().onAuthStateChanged(function (user) {
+          if (!user) {
+            bootstrapHint.style.display = 'none';
+            return;
+          }
+          App.Firebase.db.collection('estates').limit(1).get()
+            .then(function (snap) {
+              bootstrapHint.style.display = snap.empty ? 'block' : 'none';
+            })
+            .catch(function () {
+              // Don't show the hint if we can't tell.
+              bootstrapHint.style.display = 'none';
+            });
+        });
+      }
     })();
   </script>
 </body>
