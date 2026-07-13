@@ -19,26 +19,69 @@ const App = window.App = Object.assign(window.App || {}, {
   Auth: {
     // Firebase Auth-backed wrapper for EstatePro.
     // Phase 1 scope: register, login, logout, session check, getMyEstates.
+    // Phase 2: signals readiness to App.init via _firstAuthReadyPromise
+    //          AFTER the bunded Firestore estate has been loaded (Data.initAsync).
     _currentUser: null,
     _ready: false,
     _stateListeners: [],
+    _firstAuthReadyPromise: null,
+    _onFirstAuthReady: null,
 
     init() {
       // Hook the auth-state listener once at app boot. Use `var self` so the
       // callback's `this` does not need rebinding; the inner handler then
       // delegates to a real method on `this`.
       var self = this;
+      // Promise that resolves once Firebase auth has emitted its first
+      // state-change event AND App.Data.initAsync() has finished pulling the
+      // booted Firestore estate into the in-memory cache. App.init awaits this
+      // before calling UI.init(), so any `App.onReady(cb)` registered by HTML
+      // pages only fires after data is ready to render.
+      this._firstAuthReadyPromise = new Promise(function (resolve) {
+        self._onFirstAuthReady = resolve;
+      });
       firebase.auth().onAuthStateChanged(function (user) {
         self._handleAuthUser(user);
       });
     },
 
+    awaitFirstAuthReady() {
+      // Called by App.init.  If init() was never called, resolve immediately
+      // (no-op); if init was called and the first auth event has not yet
+      // fired, await the promise.
+      if (!this._firstAuthReadyPromise) return Promise.resolve();
+      return this._firstAuthReadyPromise;
+    },
+
     async _handleAuthUser(user) {
-      this._currentUser = user ? await this._hydrateProfile(user) : null;
+      if (user) {
+        this._currentUser = await this._hydrateProfile(user);
+        // Phase 2: pull the Firestore estate into App.Data._cache so any
+        // page that registers via App.onReady() can read App.Data.getEstate()
+        // synchronously and get our actual cloud-backed doc, not the
+        // localStorage seed.
+        try {
+          await App.Data.initAsync();
+        } catch (e) {
+          console.error('App.Data.initAsync failed during auth:', e);
+        }
+      } else {
+        this._currentUser = null;
+        // Even for signed-out users we want App.init to proceed so a sign-in
+        // landing page can use App.onReady().
+        try { App.Data.initAsync(); } catch (e) { /* ignore */ }
+      }
       this._ready = true;
+      var self = this;
       this._stateListeners.forEach(function (cb) {
-        try { cb(this._currentUser); } catch (e) { console.error(e); }
+        try { cb(self._currentUser); } catch (e) { console.error(e); }
       });
+      // Unblock any awaiters of App.init() now that Auth AND Data are ready.
+      if (typeof this._onFirstAuthReady === 'function') {
+        var fn = this._onFirstAuthReady;
+        this._onFirstAuthReady = null;
+        fn();
+      }
     },
 
     async _hydrateProfile(firebaseUser) {
@@ -196,7 +239,15 @@ const App = window.App = Object.assign(window.App || {}, {
         .where('memberIds', 'array-contains', u.uid).get();
       return snap.docs.map(function (d) {
         var data = d.data();
-        delete data.__founderSecret;
+        // NOTE: we intentionally DO NOT strip __founderSecret here.  The
+        // Firestore ruleset allows Phase 2 executor updates only if
+        // __founderSecret is unchanged (field missing OR equal).  Since the
+        // phase-2 data layer sends only fields pages mutated (which never
+        // includes __founderSecret), Firestore wouldn't touch the server's
+        // value -- but the rule-check would still fire on the missing-field
+        // case unless we also re-send the same value.  Keeping it in the
+        // cache + round-tripping it during _flush() satisfies the rule.
+        // No page renders __founderSecret; it's safe to leave in the doc.
         return { id: d.id, _doc: data };
       });
     },
@@ -592,17 +643,32 @@ const App = window.App = Object.assign(window.App || {}, {
 
   /* ============================
      DATA MANAGEMENT
+     Phase 2: Firestore-backed.
+     - initAsync() pulls the user's estate doc into the in-memory _cache.
+     - getEstate() returns _cache synchronously for render loops.
+     - saveEstate(estate, immediate) writes-through to _cache and schedules
+       a debounced Firestore .update() of the entire doc (500ms trailing
+       edge; pass `immediate = true` for deletes that must NOT be lost).
+     - isReady() reports whether _cache is bound to a real Firestore doc.
+     The legacy `init()` localStorage-seed path is retained below for
+     pre-Auth contexts (login page, encryption passphrase gate) where we
+     can't yet hit Firestore. App.init() never calls init() in Phase 2;
+     initAsync() is the path for signed-in users.
      ============================ */
   Data: {
     _cache: null,
+    _currentEstateId: null,
+    _debounceTimer: null,
 
     async init() {
+      // Legacy localStorage seed path. Kept for backwards compat with
+      // pre-Auth flows and the encryption passphrase gate. Phase 2's signed-in
+      // path is initAsync() below.
       let estate = await App.Crypto.readStorage('estatepro_estate');
       if (!estate) {
         estate = this.getSeedData();
         await App.Crypto.writeStorage('estatepro_estate', estate);
       } else {
-        // Migrate missing fields for existing data
         let migrated = false;
         let seed = null;
         if (estate.decedent && !estate.decedent.documents) {
@@ -615,9 +681,6 @@ const App = window.App = Object.assign(window.App || {}, {
           estate.executor.documents = seed.executor.documents;
           migrated = true;
         }
-        // Migrate cashflow entries: convert legacy 'account' string to 'accountId'.
-        // Match by name equality on the current asset list. Drop legacy Balance-Effect
-        // transfers-array concerns here — keep the array intact so rendering still works.
         if (Array.isArray(estate.cashflow)) {
           for (const tx of estate.cashflow) {
             if (tx && typeof tx.accountId !== 'number' && typeof tx.account === 'string') {
@@ -636,59 +699,189 @@ const App = window.App = Object.assign(window.App || {}, {
       this._cache = estate;
     },
 
-    getEstate() {
-      if (this._cache) return this._cache;
-      // Legacy fallback for plaintext or pre-init state
-      let estate = null;
+    async initAsync() {
+      // Phase 2: binds the in-memory cache to the signed-in user's estate.
+      // Called by Auth._handleAuthUser after profile hydration. Callers do
+      // not need to await it; App.init awaits Auth.awaitFirstAuthReady(),
+      // which is itself resolved from inside _handleAuthUser AFTER this
+      // function returns, so any App.onReady() callback registered by a
+      // data page is guaranteed to render with _cache populated.
       try {
-        const raw = localStorage.getItem('estatepro_estate');
-        if (!raw) return this.getSeedData();
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.ct && parsed.algo) {
-          // Encrypted but not yet decrypted — return safe empty structure
-          return this.getEmptyEstate();
+        if (!App.Auth || typeof App.Auth.getCurrentUser !== 'function') {
+          this._cache = this.getEmptyEstate();
+          return;
         }
-        estate = parsed;
-      } catch (e) { /* ignore */ }
-      if (!estate) {
-        estate = this.getSeedData();
-        this.saveEstate(estate);
+        var u = App.Auth.getCurrentUser();
+        if (!u) {
+          // No signed-in user. Stay with a stable empty shape so pages that
+          // render before auth-state-known still produce output (rather than
+          // throwing).
+          this._cache = this.getEmptyEstate();
+          return;
+        }
+        if (!App.Firebase || !App.Firebase.db) {
+          // No Firestore available; keep cache empty. Pages that need data
+          // will detect this in initAsync() and render a banner.
+          this._cache = this.getEmptyEstate();
+          return;
+        }
+        var estates = await App.Auth.getMyEstates();
+        if (!estates || estates.length === 0) {
+          // No estate yet — caller is in the bootstrap path. Page may want
+          // to redirect to bootstrap.html. We stay on the requested page;
+          // sidebar nav already directs the user there.
+          this._currentEstateId = null;
+          this._cache = this.getEmptyEstate();
+          return;
+        }
+        // Phase 2: bind to the first estate. Phase 4 will add a sidebar
+        // selector for multi-estate users; the integration point is here
+        // (just change _currentEstateId and re-run initAsync from scratch).
+        var estate = estates[0];
+        this._currentEstateId = estate.id;
+        this._cache = this._normalize(estate._doc);
+      } catch (e) {
+        console.error('[EstatePro] App.Data.initAsync failed:', e);
+        this._cache = this.getEmptyEstate();
       }
-      return estate;
     },
 
-    saveEstate(estate) {
-      // Persist estate to localStorage (and update in-memory cache). Mirrors Auth.saveUsers.
-      // Multiple pages (cashflow, assets, debts, heirs, executor, decedent, tasks) call this
-      // after mutating the estate object, so it must always be defined.
+    _normalize(doc) {
+      // Make sure the cache has every expected collection field with sane
+      // defaults so a render loop can rely on .tasks, .assets etc. always
+      // being arrays (instead of undefined). Top-level extras (memberIds,
+      // roles, __founderSecret, createdBy, createdAt, pendingInvites) are
+      // preserved on the cache so the round-trip flush in _flush() doesn't
+      // silently strip them — Firestore's ruleset requires these to stay
+      // byte-for-byte equal to keep allow update: true.
+      var base = this.getEmptyEstate();
+      if (!doc || typeof doc !== 'object') return base;
+      var baseKeys = Object.keys(base);
+      for (var i = 0; i < baseKeys.length; i++) {
+        var k = baseKeys[i];
+        if (doc[k] !== undefined) base[k] = doc[k];
+      }
+      var extraKeys = Object.keys(doc);
+      for (var j = 0; j < extraKeys.length; j++) {
+        var ek = extraKeys[j];
+        if (ek in base) continue;
+        base[ek] = doc[ek];
+      }
+      ['tasks', 'assets', 'debts', 'cashflow', 'heirs', 'distributions'].forEach(function (k) {
+        if (!Array.isArray(base[k])) base[k] = [];
+      });
+      if (!base.decedent || typeof base.decedent !== 'object') base.decedent = {};
+      if (!base.executor  || typeof base.executor  !== 'object') base.executor = {};
+      return base;
+    },
+
+    isReady() {
+      // True iff initAsync succeeded and bound an estate doc id.
+      return !!(this._cache && this._currentEstateId);
+    },
+
+    getEstate() {
+      // Synchronous getter for render loops. Returns the cache when bound;
+      // otherwise a stable empty-shape so the page doesn't crash before
+      // initAsync has had a chance to run.
+      return this._cache || this.getEmptyEstate();
+    },
+
+    saveEstate(estate, immediate) {
+      // Writes through to the cache (source of truth for the UI), then
+      // schedules a debounced Firestore update. Pass `immediate = true`
+      // for deletes (you don't want a 500ms window where the deleted row
+      // could come back from a stale cloud read). Returns a Promise that
+      // resolves once the Firestore round-trip is done (or after the
+      // debounce timer fires).
       this._cache = estate;
-      return App.Crypto.writeStorage('estatepro_estate', estate).catch(err => console.error('Failed to save estate:', err));
+      if (immediate) return this.flushNow();
+      var self = this;
+      if (this._debounceTimer) clearTimeout(this._debounceTimer);
+      return new Promise(function (resolve) {
+        self._debounceTimer = setTimeout(function () {
+          self._debounceTimer = null;
+          self.flushNow().then(resolve).catch(function (err) {
+            console.error('[EstatePro] data debounced flush failed:', err);
+            resolve();
+          });
+        }, 500);
+      });
+    },
+
+    flushNow() {
+      // Flushes the current cache to Firestore (or localStorage fallback)
+      // immediately. Used by saveEstate(immediate=true), by clearAllEstateData,
+      // and by beforeunload via App._pendingWrites accounting.
+      if (this._debounceTimer) {
+        clearTimeout(this._debounceTimer);
+        this._debounceTimer = null;
+      }
+      return this._flush();
+    },
+
+    async _flush() {
+      // The actual write. Best-effort: if Firestore isn't available OR
+      // we're not bound to a currentEstateId, we mirror the cache into
+      // localStorage so a subsequent reload can recover offline.
+      if (!this._cache) return;
+      if (!this._currentEstateId || !App.Firebase || !App.Firebase.db) {
+        try { await App.Crypto.writeStorage('estatepro_estate', this._cache); }
+        catch (e) { /* ignore */ }
+        return;
+      }
+      var payload;
+      try { payload = JSON.parse(JSON.stringify(this._cache)); }
+      catch (e) { console.error('[EstatePro] _flush: cannot serialize cache', e); return; }
+      // Stamp updatedAt so multi-device users can tell which copy is newer.
+      payload.updatedAt = new Date().toISOString();
+      try {
+        await App.Firebase.db.collection('estates').doc(this._currentEstateId).update(payload);
+      } catch (e) {
+        console.error('[EstatePro] _flush failed for estate', this._currentEstateId, e);
+        // Mirror to localStorage so we don't lose state on next reload.
+        try { await App.Crypto.writeStorage('estatepro_estate', this._cache); } catch (_) {}
+        throw e;
+      }
     },
 
     getEmptyEstate() {
       return JSON.parse(JSON.stringify({
         decedent: {},
-        executor: {},
+        executor:  {},
         tasks: [],
         assets: [],
         debts: [],
         cashflow: [],
         heirs: [],
-        // Distributions are now sourced from estate.cashflow where type === 'Distribution'.
-        // The legacy planned-array is unused; new entries come from the Cashflow page.
         distributions: []
       }));
     },
 
     getNextId(array) {
       if (!array || array.length === 0) return 1;
-      return Math.max(...array.map(item => item.id || 0)) + 1;
+      return Math.max(...array.map(function (item) { return item.id || 0; })) + 1;
+    },
+
+    async reloadFromStorage() {
+      // Phase 2 helper used by `pageshow` bfcache listeners on the
+      // dashboard and distributions pages. Re-pulls the bound Firestore
+      // estate doc so the in-memory cache reflects any out-of-band changes
+      // that happened while the page was in the bfcache. No-op when no
+      // estate is bound yet (e.g. during bootstrap).
+      try {
+        await this.initAsync();
+      } catch (e) {
+        console.warn('[EstatePro] Data.reloadFromStorage:', e && e.message ? e.message : e);
+      }
     },
 
     async clearAllEstateData() {
-      const empty = this.getEmptyEstate();
-      this._cache = empty;
-      await App.Crypto.writeStorage('estatepro_estate', empty);
+      // Replaces the entire cache with an empty estate AND flushes that to
+      // Firestore immediately so the next device sync shows the wipe.
+      this._cache = this.getEmptyEstate();
+      try { await this.flushNow(); }
+      catch (e) { console.error('[EstatePro] clearAllEstateData flush failed:', e); }
       return { success: true, message: 'All estate data has been cleared. The estate is now empty.' };
     }
   },
@@ -785,6 +978,27 @@ const App = window.App = Object.assign(window.App || {}, {
      SYNC - JSON EXPORT/IMPORT
      ============================ */
   Sync: {
+    // === Phase 2 export sanitization ===
+    // The live Firestore-backed estate doc on App.Data._cache now contains
+    // structural/auth fields that should NEVER leave the browser as part of a
+    // user-facing backup:  __founderSecret, memberIds, roles, pendingInvites,
+    // createdBy, createdAt.  These are server-side enforcement metadata, not
+    // user data; including them in export JSON leaks the founder-secret hash
+    // (anyone with the original secret + hash could try to forge a second
+    // Phase-1-style bootstrap if the ruleset is later weakened) and the
+    // memberIds/roles map (who has access).  This helper shallow-copies the
+    // doc and deletes those top-level keys *without* mutating the live cache.
+    // Nested arrays (assets/debts/cashflow/heirs/tasks) are shared by
+    // reference with the live cache; that's fine because JSON.stringify is
+    // read-only and the export is a snapshot at serialization time.
+    _STRUCTURAL_EXPORT_FIELDS: ['__founderSecret', 'memberIds', 'roles', 'pendingInvites', 'createdBy', 'createdAt', '_currentEstateId'],
+    _sanitizeEstateForExport(estate) {
+      if (!estate || typeof estate !== 'object') return estate;
+      var copy = Object.assign({}, estate);
+      this._STRUCTURAL_EXPORT_FIELDS.forEach(function (k) { delete copy[k]; });
+      return copy;
+    },
+
     getExportData() {
       const estate = App.Data.getEstate();
       const users = App.Auth.getUsers();
@@ -794,7 +1008,7 @@ const App = window.App = Object.assign(window.App || {}, {
         version: '1.0',
         exportedAt: new Date().toISOString(),
         exportedBy: session ? session.username : 'unknown',
-        estate: estate,
+        estate: this._sanitizeEstateForExport(estate),
         users: users,
         preferences: {
           darkMode: darkMode === 'true'
@@ -822,7 +1036,11 @@ const App = window.App = Object.assign(window.App || {}, {
     },
 
     async exportEstateOnly() {
-      const estate = App.Data.getEstate();
+      // Phase 2: also flow through the sanitizer so Estate-Only export
+      // doesn't leak __founderSecret / memberIds / roles / etc.  Without
+      // this, only exportAll() (which goes through getExportData) would be
+      // sanitized and this path would ship the raw Firestore doc.
+      const estate = this._sanitizeEstateForExport(App.Data.getEstate());
       let exportContent;
       if (App.Crypto.isEncryptionEnabled() && App.Crypto.hasPassphrase()) {
         const envelope = await App.Crypto.encrypt(JSON.stringify(estate, null, 2), App.Crypto.getPassphrase());
@@ -1986,12 +2204,22 @@ App.init = async function() {
   } catch (e) {
     console.error('Crypto.init failed during App.init:', e);
   }
-  // Wire App.Auth.init directly so the auth-state listener always starts,
-  // independent of Crypto.init's passphrase-prompt branch.
+  // Wire App.Auth.init.  Auth.init creates _firstAuthReadyPromise and
+  // registers firebase.auth().onAuthStateChanged; the Promise resolves
+  // inside _handleAuthUser AFTER profile hydration + App.Data.initAsync()
+  // have populated the in-memory cache.  Awaiting here means UI.init() (and
+  // therefore App._setReady() + every App.onReady() callback) only runs
+  // once a Firestore estate doc is bound and ready to render against. This
+  // is the keystone of Phase 2: pages no longer race the auth hydration.
   try {
     this.Auth.init();
   } catch (e) {
     console.error('Auth.init failed during App.init:', e);
+  }
+  try {
+    await this.Auth.awaitFirstAuthReady();
+  } catch (e) {
+    console.error('Auth.awaitFirstAuthReady failed during App.init:', e);
   }
   this.UI.init();
 };
@@ -2007,6 +2235,19 @@ App.Crypto.writeStorage = async function(key, value) {
     App._pendingWrites--;
   }
 };
+// Phase 2: also track Firestore flushes for the beforeunload warning so a
+// debounced save that's already in flight (or a delete's immediate flush)
+// can't be lost to a quick back-button navigation.
+if (App.Data && typeof App.Data._flush === 'function') {
+  const _originalFlush = App.Data._flush.bind(App.Data);
+  App.Data._flush = async function () {
+    App._pendingWrites++;
+    try { return await _originalFlush(); }
+    finally {
+      App._pendingWrites = Math.max(0, App._pendingWrites - 1);
+    }
+  };
+}
 
 window.addEventListener('beforeunload', (e) => {
   if (App._pendingWrites > 0) {

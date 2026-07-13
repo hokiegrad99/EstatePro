@@ -193,6 +193,7 @@
   <script src="js/app.js"></script>
 <script>
     (function() {
+      App.onReady(function() {
       const user = App.Auth.checkSession();
       if (!user) return;
       document.getElementById('userName').textContent = user.name;
@@ -757,6 +758,7 @@
       };
 
       App.onReady(renderCashflow);
+      });
     })();
   </script>
 </body>

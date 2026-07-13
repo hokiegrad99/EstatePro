@@ -188,6 +188,7 @@
   <script src="js/app.js"></script>
 <script>
     (function() {
+      App.onReady(function() {
       const user = App.Auth.checkSession();
       if (!user) return;
       document.getElementById('userName').textContent = user.name;
@@ -261,7 +262,7 @@
         if (!confirm('Are you sure you want to delete this debt?')) return;
         const estate = App.Data.getEstate();
         estate.debts = estate.debts.filter(d => d.id !== id);
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         renderDebts();
       };
 
@@ -296,6 +297,7 @@
         App.Export.toCSV(estate.debts, 'estate-debts.csv');
       };
       App.onReady(renderDebts);
+      });
     })();
   </script>
 </body>

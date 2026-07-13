@@ -118,9 +118,35 @@ service cloud.firestore {
         && request.resource.data.roles[request.auth.uid] == 'executor'
         && request.resource.data.pendingInvites.size() == 0;
 
-      // Phase 2+ will add: allow update for executors, allow update for invite consumption.
+      // Phase 2: executor writes allowed; structural/auth fields frozen.
+      //
+      // To update this doc the caller must:
+      //   (1) be a member of this estate (see isMember), AND
+      //   (2) hold the 'executor' role for this estate specifically.
+      //
+      // They MUST NOT mutate any of the immutable fields below. The phase 1
+      // bootstrap created `__founderSecret`, `memberIds`, `roles`,
+      // `pendingInvites`, `createdBy`, and `createdAt`; invite consumption (Phase
+      // 4) will be the only legitimate writer of `memberIds` and `roles`, and
+      // we'll add a separate rule path for that. Until then, this rule is the
+      // only path that lets the bootstrap user edit estate data, keeping the
+      // structural shape stable across Phase 2 writes.
+      allow update: if isMember(estateId)
+        && resource.data.roles[request.auth.uid] == 'executor'
+        && request.resource.data.memberIds      == resource.data.memberIds
+        && request.resource.data.roles          == resource.data.roles
+        && request.resource.data.pendingInvites == resource.data.pendingInvites
+        // __founderSecret: client doesn't send it; Firestore partial-update
+        // leaves the existing server value untouched. We phrase the rule so
+        // EITHER (a) the field is missing from the request (auto-unchanged) OR
+        // (b) the value matches the server's value (no mutation).
+        && (!('__founderSecret' in request.resource.data)
+            || request.resource.data.__founderSecret == resource.data.__founderSecret)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+
       // Phase 4 will add: allow delete for executors.
-      allow update, delete: if false;
+      allow delete: if false;
     }
   }
 }

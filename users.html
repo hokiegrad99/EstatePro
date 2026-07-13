@@ -173,6 +173,7 @@
   <script src="js/app.js"></script>
 <script>
     (function() {
+      App.onReady(function() {
       // Auth check
       const user = App.Auth.checkSession();
       if (!user) return;
@@ -321,6 +322,7 @@
         setTimeout(() => { container.innerHTML = ''; }, 5000);
       }
       App.onReady(renderUsers);
+      });
     })();
   </script>
 </body>
