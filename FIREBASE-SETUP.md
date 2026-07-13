@@ -111,6 +111,21 @@ The new `App.Auth` wrapper creates:
 - A Firebase Auth user
 - A `users/{uid}` Firestore profile doc
 
+> **If you see a red "Firebase is not configured" banner above the form**
+> with a specific reason, that is the helpful replacement for the old
+> "Cannot read properties of undefined (reading 'db')" error. The most
+> common causes are:
+> - **You haven't enabled Firestore yet.** The Auth service is enabled but
+>   the Firestore service isn't — go to **Build → Firestore Database** in
+>   the Firebase console and click **Create database**.
+> - **`firebase-config.js` still has placeholders.** Paste your real
+>   Firebase Web SDK config values into `js/firebase-config.js` (step 2).
+> - **The Firebase SDK `<script>` tags aren't before `js/firebase-bridge.js`
+>   in your HTML.** Verify the order in step 6.
+>
+> If the banner doesn't show but registration still errors, check the
+> browser dev tools Console for the full stack trace.
+
 ## 8. Founder bootstrap
 
 1. While signed in, visit `bootstrap.html`.

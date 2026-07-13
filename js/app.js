@@ -33,6 +33,23 @@ const App = {
     },
 
     async _hydrateProfile(firebaseUser) {
+      // If the Firebase bridge didn't initialize (e.g. Firestore not enabled),
+      // return a best-effort profile from the Firebase Auth user only.
+      if (!App.Firebase || !App.Firebase.db) {
+        console.warn('[EstatePro] Firebase Firestore is unavailable; profile ' +
+          'hydration skipped. Reason: ' +
+          (App.Firebase && App.Firebase.whyNotReady && App.Firebase.whyNotReady() ||
+            'App.Firebase is undefined.'));
+        return {
+          uid: firebaseUser.uid,
+          id: firebaseUser.uid,
+          email: firebaseUser.email,
+          name: firebaseUser.displayName || firebaseUser.email,
+          role: null,
+          displayName: firebaseUser.displayName || '',
+          createdAt: null
+        };
+      }
       try {
         var ref = App.Firebase.db.collection('users').doc(firebaseUser.uid);
         var snap = await ref.get();
@@ -71,6 +88,18 @@ const App = {
       var email = (opts && opts.email) || '';
       var password = (opts && opts.password) || '';
       var name = (opts && opts.name) || '';
+      // Refuse early with a helpful message if Firebase Firestore isn't ready.
+      // (Auth alone could succeed, but we can't write the users/{uid} doc
+      // without Firestore — and the ruleset also requires email on create.)
+      if (!App.Firebase || !App.Firebase.db) {
+        var reason = (App.Firebase && App.Firebase.whyNotReady && App.Firebase.whyNotReady()) ||
+          'App.Firebase is not initialized.';
+        return {
+          success: false,
+          message: 'Cannot create account: Firebase Firestore did not initialize. ' +
+            reason + ' See the red banner above the form for details.'
+        };
+      }
       try {
         var cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
         if (name) {
@@ -135,6 +164,12 @@ const App = {
     async getMyEstates() {
       var u = this.getCurrentUser();
       if (!u) return [];
+      if (!App.Firebase || !App.Firebase.db) {
+        console.warn('[EstatePro] getMyEstates: Firestore unavailable. ' +
+          'Reason: ' + (App.Firebase && App.Firebase.whyNotReady && App.Firebase.whyNotReady() ||
+            'App.Firebase is undefined.'));
+        return [];
+      }
       var snap = await App.Firebase.db.collection('estates')
         .where('memberIds', 'array-contains', u.uid).get();
       return snap.docs.map(function (d) {

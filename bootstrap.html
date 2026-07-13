@@ -115,8 +115,13 @@
           .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
       }
 
-      if (!window.App || !window.App.Firebase) {
-        showMsg('Firebase is not configured. Edit <code>js/firebase-config.js</code> first.', 'danger');
+      if (!window.App || !window.App.Firebase ||
+          !window.App.Firebase.isReady || !window.App.Firebase.isReady()) {
+        var reason = (window.App && window.App.Firebase && window.App.Firebase.whyNotReady &&
+          window.App.Firebase.whyNotReady()) ||
+          'Firebase is not initialized.';
+        showMsg('Firebase is not configured. ' + reason +
+          ' Edit <code>js/firebase-config.js</code> first.', 'danger');
         return;
       }
 

@@ -70,6 +70,17 @@
 
     <div id="authMessage"></div>
 
+    <div id="firebaseBanner" style="display:none; margin-top:1rem; padding:0.75rem 1rem;
+         background:rgba(239,68,68,0.08); border:1px solid var(--danger-color);
+         border-radius:var(--radius); font-size:0.85rem; color:var(--text-primary);">
+      <strong>Firebase is not configured.</strong>
+      <div id="firebaseBannerReason" style="margin-top:0.4rem;"></div>
+      <div style="margin-top:0.5rem; font-size:0.8rem; color:var(--text-secondary);">
+        Open the browser dev tools console for full details. See
+        <code>FIREBASE-SETUP.md</code> for the full walkthrough.
+      </div>
+    </div>
+
     <div id="bootstrapHint" style="display:none; margin-top:1rem; padding:0.75rem;
          background:var(--info-light); border:1px solid var(--info-color);
          border-radius:var(--radius); font-size:0.85rem; color:var(--text-primary);">
@@ -105,6 +116,21 @@
         authMessage.innerHTML = '<div class="alert alert-' + type + '">' +
           App.UI.escapeHtml(html) + '</div>';
       }
+
+      // If App.Firebase failed to initialize (e.g. Firestore not yet enabled,
+      // firebase-config.js still has placeholders, SDK scripts missing), show
+      // a banner so the user gets an actionable message instead of a cryptic
+      // "Cannot read properties of undefined (reading 'db')" later.
+      (function () {
+        var banner = document.getElementById('firebaseBanner');
+        var reasonEl = document.getElementById('firebaseBannerReason');
+        if (!banner || !reasonEl) return;
+        if (!window.App || !window.App.Firebase) return;
+        if (window.App.Firebase.isReady && window.App.Firebase.isReady()) return;
+        reasonEl.textContent = (window.App.Firebase.whyNotReady && window.App.Firebase.whyNotReady()) ||
+          'App.Firebase is not initialized.';
+        banner.style.display = 'block';
+      })();
 
       // If already signed in, route to the dashboard (or the bootstrap hint).
       if (App.Auth.isLoggedIn()) {
@@ -201,13 +227,19 @@
       }
 
       // If the user signs in but has no estates, surface the bootstrap hint.
-      if (window.App && window.App.Firebase && window.firebase) {
+      // Guarded: skip quietly if Firebase didn't initialize (banner above
+      // already shows the reason).
+      if (window.App && window.App.Firebase && window.App.Firebase.isReady && window.App.Firebase.isReady() && window.firebase) {
         firebase.auth().onAuthStateChanged(function (user) {
           if (!user) {
             bootstrapHint.style.display = 'none';
             return;
           }
-          App.Firebase.db.collection('estates').limit(1).get()
+          if (!window.App.Firebase.db) {
+            bootstrapHint.style.display = 'none';
+            return;
+          }
+          window.App.Firebase.db.collection('estates').limit(1).get()
             .then(function (snap) {
               bootstrapHint.style.display = snap.empty ? 'block' : 'none';
             })

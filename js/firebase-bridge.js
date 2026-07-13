@@ -5,31 +5,46 @@
  * BEFORE js/app.js. See FIREBASE-SETUP.md for the script tag order.
  *
  * After this script runs, the rest of the app can access:
- *   - App.Firebase.app   : the FirebaseApp instance
- *   - App.Firebase.auth  : firebase.auth.Auth
- *   - App.Firebase.db    : firebase.firestore.Firestore
+ *   - App.Firebase.app              : the FirebaseApp instance
+ *   - App.Firebase.auth             : firebase.auth.Auth
+ *   - App.Firebase.db               : firebase.firestore.Firestore
+ *   - App.Firebase.isReady()        : boolean — true means everything initialized
+ *   - App.Firebase.whyNotReady()    : human-readable reason if not ready
  * ============================================================ */
 
 (function () {
   'use strict';
 
+  window.App = window.App || {};
+
   if (typeof firebase === 'undefined') {
-    console.error(
-      '[EstatePro] Firebase SDK is not loaded. Make sure the Firebase compat ' +
-      'SDK scripts come before js/firebase-bridge.js in your HTML.'
-    );
-    window.App = window.App || {};
-    window.App.Firebase = null;
+    var msg = 'Firebase SDK scripts did not load. Check that the three ' +
+      '<script> tags for firebase-app, firebase-auth and firebase-firestore ' +
+      'come before js/firebase-bridge.js in your HTML.';
+    console.error('[EstatePro] ' + msg);
+    window.App.Firebase = {
+      app: null,
+      auth: null,
+      db: null,
+      isReady: function () { return false; },
+      whyNotReady: function () { return msg; }
+    };
     return;
   }
 
   var cfg = window.__FIREBASE_CONFIG__;
   if (!cfg || typeof cfg !== 'object') {
-    console.error('[EstatePro] window.__FIREBASE_CONFIG__ is missing. ' +
-      'Make sure js/firebase-config.js is loaded before js/firebase-bridge.js ' +
-      'and contains your Firebase project config.');
-    window.App = window.App || {};
-    window.App.Firebase = null;
+    var cfgMsg = 'window.__FIREBASE_CONFIG__ is missing or invalid. ' +
+      'Open js/firebase-config.js and fill in the values from your ' +
+      'Firebase project (Console -> Project settings -> General -> Your apps).';
+    console.error('[EstatePro] ' + cfgMsg);
+    window.App.Firebase = {
+      app: null,
+      auth: null,
+      db: null,
+      isReady: function () { return false; },
+      whyNotReady: function () { return cfgMsg; }
+    };
     return;
   }
 
@@ -42,17 +57,36 @@
       'Edit js/firebase-config.js with your real Firebase project config.');
   }
 
+  var app, auth, db, initErr = null;
   try {
-    var app = firebase.initializeApp(cfg);
-    window.App = window.App || {};
-    window.App.Firebase = {
-      app: app,
-      auth: firebase.auth(),
-      db: firebase.firestore()
-    };
+    app = firebase.initializeApp(cfg);
+    auth = firebase.auth();
+    db = firebase.firestore();
   } catch (e) {
-    console.error('[EstatePro] firebase.initializeApp threw:', e);
-    window.App = window.App || {};
-    window.App.Firebase = null;
+    initErr = e;
   }
+
+  if (initErr) {
+    var initMsg = 'firebase.initializeApp() threw: ' +
+      (initErr && initErr.message ? initErr.message : String(initErr)) +
+      '. Open the browser console for the full error.';
+    console.error('[EstatePro] ' + initMsg, initErr);
+    window.App.Firebase = {
+      app: null,
+      auth: null,
+      db: null,
+      isReady: function () { return false; },
+      whyNotReady: function () { return initMsg; }
+    };
+    return;
+  }
+
+  // Success.
+  window.App.Firebase = {
+    app: app,
+    auth: auth,
+    db: db,
+    isReady: function () { return !!(this.app && this.auth && this.db); },
+    whyNotReady: function () { return ''; }
+  };
 })();
