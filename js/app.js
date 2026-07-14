@@ -420,8 +420,16 @@ const App = window.App = Object.assign(window.App || {}, {
             tx.update(estRef, estRefUpdate);
           });
           // Active estate switched -- the new member now has access.
+          // Phase 4→5 fix: persist to localStorage as well as memory.
+          // Without this, the auto-consume banner's window.location.reload()
+          // preserves the in-memory _currentEstateId, but any manual refresh
+          // AFTER the reload would re-read localStorage and bind to estates[0]
+          // (or whatever the heir had saved before the consume), silently
+          // routing them away from the freshly-joined estate. Same key as
+          // switchEstate() so the two paths stay symmetric.
           if (App.Data && App.Data._currentEstateId !== estateId) {
             App.Data._currentEstateId = estateId;
+            try { localStorage.setItem('estatepro_active_estate', estateId); } catch (e) { /* ignore */ }
             try { await App.Data.initAsync(); } catch (e) { /* ignore */ }
           }
           return { success: true, message: 'Welcome! You now have access to the estate.' };
@@ -1065,10 +1073,17 @@ const App = window.App = Object.assign(window.App || {}, {
           this._cache = this.getEmptyEstate();
           return;
         }
-        // Phase 2: bind to the first estate. Phase 4 will add a sidebar
-        // selector for multi-estate users; the integration point is here
-        // (just change _currentEstateId and re-run initAsync from scratch).
-        var estate = estates[0];
+        // Phase 4→5 fix: honor a user's saved active-estate selection.
+        // switchEstate() writes to localStorage('estatepro_active_estate');
+        // we read it back here so a page refresh (or tab close + reopen)
+        // doesn't bounce the user back to estates[0]. Find-or-default: if
+        // the saved id is missing (executor removed the user, estate was
+        // deleted, leftover entry from an earlier Firebase project),
+        // fall through to the legacy estates[0] binding.
+        var savedActiveId = null;
+        try { savedActiveId = localStorage.getItem('estatepro_active_estate'); } catch (e) { /* ignore */ }
+        var savedEstate = savedActiveId && estates.find(function (e) { return e.id === savedActiveId; });
+        var estate = savedEstate || estates[0];
         this._currentEstateId = estate.id;
         this._cache = this._normalize(estate._doc);
       } catch (e) {
@@ -1219,9 +1234,13 @@ const App = window.App = Object.assign(window.App || {}, {
       if (this._currentEstateId === estateId) return;
       this._currentEstateId = estateId;
       try { await this.initAsync(); } catch (e) { console.warn('switchEstate initAsync failed:', e && e.message); }
-      try {
-        sessionStorage.setItem('estatepro_active_estate', estateId);
-      } catch (e) { /* ignore */ }
+      // Phase 4→5 fix: use localStorage (NOT sessionStorage) so the active
+      // estate selection survives a hard page refresh AND a tab close.
+      // sessionStorage wiped on tab close; localStorage persists across both.
+      // We also defend against the old sessionStorage key (no reads in this
+      // file, but extensions/bookmarklets could fight us) by purging it.
+      try { localStorage.setItem('estatepro_active_estate', estateId); } catch (e) { /* ignore */ }
+      try { sessionStorage.removeItem('estatepro_active_estate');    } catch (e) { /* ignore */ }
       window.location.reload();
     },
 
