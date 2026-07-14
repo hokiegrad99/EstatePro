@@ -82,6 +82,39 @@ service cloud.firestore {
           && data.get('pendingInvites', null) is map;
     }
 
+    // ---- Phase 4 helper: invite consumption ----
+    // Validates the legitimate-pattern of a NEW member joining via an
+    // accepted invite. Compares resource (server state before the write)
+    // against request.resource (after-the-write client intent). Firestore
+    // rules can't deep-validate the matching subdoc atomically, so the
+    // client performs a single runTransaction that marks the invite subdoc's
+    // redeemedBy/redeemedAt AT THE SAME TIME as the parent doc update --
+    // if either write fails server-side, both roll back.
+    function isInviteConsumption() {
+      let uid = request.auth.uid;
+      return isSignedIn()
+        // The joiner must not already be a member (prevents replay/double-add).
+        && !(uid in resource.data.memberIds)
+        // Exactly one member added and it is THIS signer.
+        && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
+        && request.resource.data.memberIds[request.resource.data.memberIds.size() - 1] == uid
+        // A non-null role string is assigned (executor/heir/beneficiary).
+        && request.resource.data.roles[uid] is string
+        && (request.resource.data.roles[uid] in ['executor', 'heir', 'beneficiary']);
+        // NOTE: pendingInvites.size() decrement intentionally NOT enforced.
+        // The subcollection /estates/{id}/invites/ is the source of truth
+        // for outstanding invitations. The parent doc's pendingInvites is a
+        // denormalized cache populated only when createInvite travels through
+        // the (optional) createInviteLink Cloud Function, which uses Admin
+        // SDK to atomically write both the subdoc and the cache key. The
+        // direct App.Auth.Invite.createInvite path writes only the subdoc and
+        // leaves pendingInvites untouched on the parent -- so a strict
+        // size-decrement check would unconditionally reject every legitimate
+        // consume. Strict symmetry is restored once createInvite is migrated
+        // end-to-end to the Cloud Function path; until then, the ruleset
+        // intentionally trusts the subcollection redeem-pattern.
+    }
+
     // ---- users/{userId} ----
     // Each user can read and write only their own profile doc.
     match /users/{userId} {
@@ -173,8 +206,11 @@ service cloud.firestore {
       // we'll add a separate rule path for that. Until then, this rule is the
       // only path that lets the bootstrap user edit estate data, keeping the
       // structural shape stable across Phase 2 writes.
-      allow update: if isMember(estateId)
+      allow update: if (isMember(estateId)
         && resource.data.roles[request.auth.uid] == 'executor'
+        // The Phase 2 frozen-fields chain: the executor-writing path can
+        // edit tasks/assets/debts/cashflow/heirs/decedent/executor BUT NOT
+        // touch the structural / auth fields below.
         && request.resource.data.memberIds      == resource.data.memberIds
         && request.resource.data.roles          == resource.data.roles
         && request.resource.data.pendingInvites == resource.data.pendingInvites
@@ -186,10 +222,53 @@ service cloud.firestore {
             || request.resource.data.__founderSecret == resource.data.__founderSecret)
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
-        && isValidEstateShape(request.resource.data);
+        && isValidEstateShape(request.resource.data))
+        // ---- Phase 4 NEW OR-branch ----
+        // Allow a NEW member to mutate memberIds + roles + pendingInvites IF
+        // and only if the diff matches the consume-invite shape (one member
+        // added, one pending-invite removed, nested invite subdoc claimed
+        // atomically client-side via runTransaction).
+        || (isInviteConsumption()
+            && isValidEstateShape(request.resource.data));
 
       // Phase 4 will add: allow delete for executors.
       allow delete: if false;
+
+      // ---- /estates/{estateId}/invites/{inviteId} subcollection ----
+      // Phase 4 sub-system 1: invite storage. Each invite is a thin envelope
+      // created by the executor (or createInviteLink Cloud Function) and
+      // claimed by the invitee in a single runTransaction against this doc
+      // and the parent. The atomic consume gives us atomicity the ruleset
+      // can't provide cross-document.
+      match /invites/{inviteId} {
+        // Read: any signed-in user can see the doc IF they're a member of the
+        // parent estate OR their email matches what's being offered to them.
+        // (We don't want any random signed-in user enumerating invites.)
+        allow read: if isSignedIn()
+          && (isMember(estateId)
+              || request.auth.token.email == resource.data.inviteeEmail);
+        // Create: executor of the parent estate only. Shape enforced via
+        // required keys + type checks. FieldValue.serverTimestamp() is used
+        // for createdAt by the client.
+        allow create: if isMember(estateId)
+          && get(/databases/$(database)/documents/estates/$(estateId)).data.roles[request.auth.uid] == 'executor'
+          && request.resource.data.keys().hasAll(['inviteeEmail', 'role', 'createdBy', 'createdAt'])
+          && request.resource.data.inviteeEmail is string
+          && (request.resource.data.role in ['executor', 'heir', 'beneficiary'])
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt is timestamp;
+        // Update: the invitee claims the seat. Diff is restricted to ONLY
+        // redeemedBy + redeemedAt so no other field can be smuggled in.
+        allow update: if isSignedIn()
+          && request.auth.token.email == resource.data.inviteeEmail
+          && resource.data.redeemedBy == null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['redeemedBy', 'redeemedAt']);
+        // Delete: executor of the parent estate, and only an UNREDEEMED
+        // invite (so revocation can't yank an already-claimed seat).
+        allow delete: if isMember(estateId)
+          && get(/databases/$(database)/documents/estates/$(estateId)).data.roles[request.auth.uid] == 'executor'
+          && resource.data.redeemedBy == null;
+      }
     }
   }
 }

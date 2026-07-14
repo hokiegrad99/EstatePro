@@ -45,6 +45,12 @@
       <div class="sidebar-brand-icon">EP</div>
       <div class="sidebar-brand-text">EstatePro</div>
     </div>
+    <div class="sidebar-estate-selector" id="sidebarEstateSelector" style="display:none; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-color, #e2e8f0);">
+      <label for="estateSelect" style="display:block; font-size: 0.7rem; color: var(--text-secondary, #64748b); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.05em;">Active estate</label>
+      <select id="estateSelect" class="form-select form-select-sm" aria-label="Switch active estate">
+        <option value="">Loading…</option>
+      </select>
+    </div>
     <nav class="sidebar-nav">
       <ul>
         <li><a href="dashboard.html" class="active"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Dashboard</a></li>
@@ -127,6 +133,23 @@
           <div class="stat-value" id="totalDistributed">$0.00</div>
           <div class="stat-change positive"><span id="completedDistributionCount">0</span> completed distributions &rarr;</div>
         </a>
+      </div>
+
+      <!-- Phase 4: Pending Invitations card (executor-only) -->
+      <div id="pendingInvitesCard" class="card" style="margin-top:1rem; display:none;">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            Pending Invitations
+          </div>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom:0.75rem; font-size:0.85rem; color:var(--text-secondary);">Share these links with the people you want to invite. They sign in (or register) using the matching email and the invite is applied automatically. Each link is single-use and expires when redeemed.</p>
+          <div id="pendingInvitesList"></div>
+        </div>
       </div>
 
       <!-- Two Column Layout -->
@@ -454,6 +477,47 @@
         }).join('');
       }
 
+      async function renderPendingInvites() {
+        const card = document.getElementById('pendingInvitesCard');
+        if (!card) return;
+        // Only the executor of the active estate sees this; helpers/heirs don't.
+        var currentUser = App.Auth.getCurrentUser();
+        var estate = App.Data.getEstate();
+        var roles = (estate && estate.roles) || {};
+        if (!currentUser || roles[currentUser.uid] !== 'executor') {
+          card.style.display = 'none';
+          return;
+        }
+        card.style.display = '';
+        var listEl = document.getElementById('pendingInvitesList');
+        try {
+          var invites = await App.Auth.Invite.listPendingInvites(App.Data.getCurrentEstateId());
+          if (!invites || invites.length === 0) {
+            listEl.innerHTML = '<p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">No pending invitations. <a href="executor.html" style="color:var(--primary-color);">Create one from the Executor page.</a></p>';
+            return;
+          }
+          listEl.innerHTML = invites.map(function (inv) {
+            var d = inv._doc || {};
+            var when = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleDateString() : 'recently';
+            return '<div style="display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0; border-bottom:1px solid var(--border-color);">' +
+              '<div style="flex:1;">' +
+                '<div style="font-weight:600;">' + App.UI.escapeHtml(d.inviteeEmail) + '</div>' +
+                '<div style="font-size:0.8rem; color:var(--text-secondary);">role: ' + App.UI.escapeHtml(d.role) + ' &middot; created ' + when + '</div>' +
+              '</div>' +
+              '<button type="button" class="btn btn-sm btn-secondary" onclick="copyInviteUrl(\'' + App.UI.escapeHtml(inv.url) + '\')">Copy link</button>' +
+            '</div>';
+          }).join('');
+        } catch (e) {
+          listEl.innerHTML = '<p style="color:var(--danger-color); margin:0;">Failed to load pending invitations.</p>';
+        }
+        window.copyInviteUrl = function (url) {
+          try { navigator.clipboard.writeText(url).then(function () { alert('Invite link copied.'); }); }
+          catch (err) {
+            prompt('Copy this invite link:', url);
+          }
+        };
+      }
+
       function renderAll() {
         renderStats();
         renderTaskProgress();
@@ -463,6 +527,7 @@
         renderEstateSummary();
         renderHeirBreakdown();
         renderDistributed();
+        renderPendingInvites();
         document.getElementById('printDate').textContent = new Date().toLocaleDateString();
       { const _d = App.Data.getEstate().decedent || {}; const _pn = document.getElementById('printDecedentName'); if (_pn) _pn.textContent = _d.fullName || _d.name || '—'; }
       }

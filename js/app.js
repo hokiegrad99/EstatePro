@@ -252,6 +252,145 @@ const App = window.App = Object.assign(window.App || {}, {
       });
     },
 
+    /* ============================================
+       INVITES  (Phase 4)
+       ============================================ */
+    Invite: {
+      // ---- createInvite ----
+      // Called from the executor's "Share Invite" panel. Writes a thin
+      // envelope doc into /estates/{estateId}/invites/{auto-id}. Rules (in
+      // firestore.rules) gate this to executors of the parent estate and
+      // require {inviteeEmail, role, createdBy, createdAt}.
+      //
+      // Returns {inviteId, url} where url is the share-able link the executor
+      // pastes into email/chat/etc. We pass the inviteId directly in the URL
+      // -- Firestore rules validate that the joiner's auth.token.email matches
+      // the doc's inviteeEmail so the doc-id-in-URL doesn't grant any extra
+      // privilege to a random viewer.
+      async createInvite(estateId, role, inviteeEmail) {
+        var u = this.getCurrentUser();
+        if (!u) return { success: false, message: 'Not signed in.' };
+        if (!App.Firebase || !App.Firebase.db) {
+          return { success: false, message: 'Firestore not initialized.' };
+        }
+        if (!['executor', 'heir', 'beneficiary'].includes(role)) {
+          return { success: false, message: 'Invalid role. Use executor/heir/beneficiary.' };
+        }
+        if (!inviteeEmail || !/^\S+@\S+\.\S+$/.test(inviteeEmail)) {
+          return { success: false, message: 'Please enter a valid email address.' };
+        }
+        try {
+          var ref = await App.Firebase.db.collection('estates').doc(estateId)
+            .collection('invites').add({
+              inviteeEmail: inviteeEmail,
+              role: role,
+              createdBy: u.uid,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              redeemedBy: null,
+              redeemedAt: null
+            });
+          var url = new URL(window.location.origin + '/index.html');
+          url.searchParams.set('estateId', estateId);
+          url.searchParams.set('inviteId', ref.id);
+          return { success: true, inviteId: ref.id, url: url.toString() };
+        } catch (err) {
+          return { success: false, message: 'Could not create invite: ' + (err && err.message ? err.message : err) };
+        }
+      },
+
+      // ---- listPendingInvites ----
+      // Query the subcollection and return only unredeemed entries. Executor
+      // dashboard uses this to populate the "Pending Invitations" card.
+      async listPendingInvites(estateId) {
+        if (!App.Firebase || !App.Firebase.db) return [];
+        try {
+          var snap = await App.Firebase.db.collection('estates').doc(estateId)
+            .collection('invites')
+            .where('redeemedBy', '==', null)
+            .orderBy('createdAt', 'desc')
+            .get();
+          return snap.docs.map(function (d) {
+            var data = d.data();
+            var url = window.location.origin + '/index.html?estateId=' + encodeURIComponent(estateId) + '&inviteId=' + encodeURIComponent(d.id);
+            return { id: d.id, _doc: data, url: url };
+          });
+        } catch (e) {
+          console.warn('[EstatePro] listPendingInvites failed:', e && e.message);
+          return [];
+        }
+      },
+
+      // ---- consumeInviteFromUrl ----
+      // Atomic acceptance. We perform a single runTransaction that:
+      //   (a) reads the parent estate doc + the invite subdoc,
+      //   (b) verifies invite.redeemedBy == null AND inviteeEmail matches our auth.email,
+      //   (c) writes the invite subdoc with redeemedBy=uid + redeemedAt=serverTimestamp(),
+      //   (d) writes the parent doc with memberIds += [uid], roles[uid] = invite.role,
+      //       and pendingInvites.size() -= 1 (via Firestore.FieldValue.delete if the invite id is a key).
+      // Firestore's runTransaction rolls back both writes if either is rejected server-side.
+      async consumeInviteFromUrl(estateId, inviteId) {
+        var u = this.getCurrentUser();
+        if (!u) return { success: false, message: 'Not signed in.' };
+        if (!App.Firebase || !App.Firebase.db) return { success: false, message: 'Firestore not initialized.' };
+        if (!estateId || !inviteId) return { success: false, message: 'Missing invite parameters.' };
+
+        var db = App.Firebase.db;
+        var authEmail = (firebase.auth().currentUser && firebase.auth().currentUser.email) || '';
+        var invRef = db.collection('estates').doc(estateId).collection('invites').doc(inviteId);
+        var estRef = db.collection('estates').doc(estateId);
+
+        try {
+          await db.runTransaction(async function (tx) {
+            var invSnap = await tx.get(invRef);
+            if (!invSnap.exists) throw new Error('Invite has been revoked or never existed.');
+            var inv = invSnap.data();
+            if (inv.redeemedBy) throw new Error('This invite was already redeemed by ' + inv.redeemedBy + '.');
+            if (inv.inviteeEmail && authEmail && inv.inviteeEmail.toLowerCase() !== authEmail.toLowerCase()) {
+              throw new Error('You must be signed in as ' + inv.inviteeEmail + ' to claim this invite.');
+            }
+            var role = inv.role;
+            if (!['executor', 'heir', 'beneficiary'].includes(role)) {
+              throw new Error('Invite has an invalid role: ' + role);
+            }
+            // (c) Mark the subdoc as redeemed.
+            tx.update(invRef, {
+              redeemedBy: u.uid,
+              redeemedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            // (d) Update parent doc.
+            var estSnap = await tx.get(estRef);
+            if (!estSnap.exists) throw new Error('Estate document not found.');
+            var newMemberIds = (estSnap.get('memberIds') || []).concat([u.uid]);
+            var newRoles = Object.assign({}, estSnap.get('roles') || {});
+            newRoles[u.uid] = role;
+            // Drop our invite key from pendingInvites (if map-based; Phase 1 created it as empty {}).
+            var pi = estSnap.get('pendingInvites') || {};
+            var piUpdate = {};
+            if (inviteId in pi) { piUpdate['pendingInvites.' + inviteId] = firebase.firestore.FieldValue.delete(); }
+            tx.update(estRef, Object.assign({
+              memberIds: newMemberIds,
+              roles: newRoles,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, piUpdate));
+          });
+          // Active estate switched -- the new member now has access.
+          if (App.Data && App.Data._currentEstateId !== estateId) {
+            App.Data._currentEstateId = estateId;
+            try { await App.Data.initAsync(); } catch (e) { /* ignore */ }
+          }
+          return { success: true, message: 'Welcome! You now have access to the estate.' };
+        } catch (err) {
+          return { success: false, message: err && err.message ? err.message : 'Could not consume invite.' };
+        }
+      }
+    },
+
+    // (InviteUrl was a sibling function declaration next to the Invite
+    // object literal -- which is a syntax error inside Object.assign's body.
+    // The URL build is now inlined at the two call sites that need it:
+    // Invite.createInvite and Invite.listPendingInvites. A helper would
+    // belong on App itself, not next to App.Auth.Invite.)
+
     // ---- Compatibility stubs for legacy callers (Sync export, users.html) ----
     // Phase 1 does not back the users list yet. These return safe values so
     // legacy pages don't crash; they are no-ops for new functionality.
@@ -863,7 +1002,7 @@ const App = window.App = Object.assign(window.App || {}, {
       return Math.max(...array.map(function (item) { return item.id || 0; })) + 1;
     },
 
-    async reloadFromStorage() {
+    async    reloadFromStorage() {
       // Phase 2 helper used by `pageshow` bfcache listeners on the
       // dashboard and distributions pages. Re-pulls the bound Firestore
       // estate doc so the in-memory cache reflects any out-of-band changes
@@ -875,6 +1014,27 @@ const App = window.App = Object.assign(window.App || {}, {
         console.warn('[EstatePro] Data.reloadFromStorage:', e && e.message ? e.message : e);
       }
     },
+
+    // ---- Phase 4: switch active estate ----
+    // Called from App.UI.initEstateSelector when the user picks a different
+    // estate in the sidebar dropdown. Re-binds the cache and reloads the
+    // page so every render loop starts fresh against the new doc. We use a
+    // full reload (rather than an in-place re-render) because Phase 2's
+    // render functions captured closures over the cached `estate.decedent`,
+    // `estate.assets`, etc. on page mount; a reload resets those.
+    async switchEstate(estateId) {
+      if (!estateId) return;
+      if (this._currentEstateId === estateId) return;
+      this._currentEstateId = estateId;
+      try { await this.initAsync(); } catch (e) { console.warn('switchEstate initAsync failed:', e && e.message); }
+      try {
+        sessionStorage.setItem('estatepro_active_estate', estateId);
+      } catch (e) { /* ignore */ }
+      window.location.reload();
+    },
+
+    // Phase 4 helper -- expose the active estate id for UI elements.
+    getCurrentEstateId() { return this._currentEstateId; },
 
     async clearAllEstateData() {
       // Replaces the entire cache with an empty estate AND flushes that to
@@ -1231,6 +1391,10 @@ const App = window.App = Object.assign(window.App || {}, {
       // Init user menu dropdown on logged-in pages
       this.initUserMenu();
 
+      // Phase 4: sidebar estate selector. No-op on pages that don't have the
+      // selector slot, and hidden when the user has only one estate.
+      this.initEstateSelector();
+
       // Notify ready callbacks
       App._setReady();
     },
@@ -1398,6 +1562,39 @@ const App = window.App = Object.assign(window.App || {}, {
       };
       cancelBtn.onclick = () => {
         this.closeModal('importPassphraseModal');
+      };
+    },
+
+    // ---- Phase 4: sidebar estate selector ----
+    // Builds a <select> inside the .sidebar-estate-selector slot. Populates
+    // it from App.Auth.getMyEstates(). On change, calls App.Data.switchEstate
+    // which re-binds the cache and reloads the page. Hidden when only one
+    // estate exists -- no need to clutter the sidebar.
+    async initEstateSelector() {
+      var slot = document.getElementById('sidebarEstateSelector');
+      if (!slot) return; // page has no selector slot
+      try {
+        var estates = await App.Auth.getMyEstates();
+      } catch (e) {
+        console.warn('[EstatePro] initEstateSelector getMyEstates failed:', e && e.message);
+        estates = [];
+      }
+      if (!estates || estates.length <= 1) {
+        slot.style.display = 'none';
+        return;
+      }
+      slot.style.display = '';
+      var sel = slot.querySelector('#estateSelect');
+      if (!sel) return;
+      sel.innerHTML = estates.map(function (e) {
+        var name = (e._doc && (e._doc.name || e._doc.title)) || ('Estate ' + e.id.substring(0, 6));
+        var selected = App.Data && App.Data._currentEstateId === e.id;
+        return '<option value="' + App.UI.escapeHtml(e.id) + '"' + (selected ? ' selected' : '') + '>' + App.UI.escapeHtml(name) + '</option>';
+      }).join('');
+      sel.onchange = function () {
+        var v = sel.value;
+        if (!v) return;
+        App.Data.switchEstate(v);
       };
     },
 

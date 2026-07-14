@@ -260,5 +260,97 @@
       }
     })();
   </script>
+
+  <!-- Phase 4: invite-token URL handler
+       When the user lands on index.html?estateId=X&inviteId=Y we:
+         1. Persist the params in sessionStorage (so login/register survive the redirect).
+         2. Show a banner above the login card explaining what is happening.
+         3. On auth-state ready, if the user is already signed in, consume now.
+         4. Otherwise wrap App.Auth.login + App.Auth.register so the redeem
+            fires immediately after a successful sign-in or sign-up.
+         After a successful consume, clear the sessionStorage slot and
+         redirect to dashboard.html so the user lands inside the new estate. -->
+  <script>
+    (function handleInviteUrl() {
+      if (!window.URLSearchParams) return;
+      var params = new URLSearchParams(window.location.search);
+      var estateId = params.get('estateId');
+      var inviteId = params.get('inviteId');
+
+      if (estateId && inviteId) {
+        try { sessionStorage.setItem('estatepro_pending_invite', JSON.stringify({ estateId: estateId, inviteId: inviteId })); } catch (e) {}
+      }
+
+      function showBanner() {
+        if (document.getElementById('inviteHint')) return;
+        var msg = document.createElement('div');
+        msg.id = 'inviteHint';
+        msg.style.cssText = 'max-width:420px; margin:1rem auto; padding:0.75rem 1rem; background:#dbeafe; color:#1e40af; border-radius:0.5rem; font-size:0.9rem; text-align:center;';
+        msg.innerHTML = '🎟️ You have a pending estate invitation. Sign in or create an account <strong>with the matching email</strong> — the invitation applies automatically.';
+        var card = document.querySelector('.login-card');
+        if (card && card.parentNode) card.parentNode.insertBefore(msg, card);
+      }
+      if (estateId && inviteId) showBanner();
+
+      function consumePendingInvite() {
+        var raw = null;
+        try { raw = sessionStorage.getItem('estatepro_pending_invite'); } catch (e) { return; }
+        if (!raw) return;
+        var p;
+        try { p = JSON.parse(raw); } catch (e) { return; }
+        if (!p || !p.estateId || !p.inviteId) return;
+        if (!App.Auth || !App.Auth.Invite || typeof App.Auth.Invite.consumeInviteFromUrl !== 'function') {
+          console.warn('App.Auth.Invite not yet available; will retry after App.init.');
+          App.onReady(function () { consumePendingInvite(); });
+          return;
+        }
+        App.Auth.Invite.consumeInviteFromUrl(p.estateId, p.inviteId).then(function (res) {
+          if (res && res.success) {
+            try { sessionStorage.removeItem('estatepro_pending_invite'); } catch (e) {}
+            try { alert(res.message || 'Welcome to the estate.'); } catch (e) {}
+            window.location.href = 'dashboard.html';
+          } else if (res && res.message) {
+            try { sessionStorage.removeItem('estatepro_pending_invite'); } catch (e) {}
+            alert('Invitation could not be applied: ' + res.message);
+          }
+        }).catch(function (e) {
+          console.error('consumePendingInvite failed:', e && e.message);
+        });
+      }
+
+      // Path 1: signed-in user arriving with a pending invite (no login needed).
+      // Register AFTER app.js loads; the onAuthStateChanged hook fires once
+      // App.Auth has hydrated its `_ready` state, with the current user (or null).
+      App.Auth.onAuthStateChanged(function (user) {
+        if (user) consumePendingInvite();
+      });
+
+      // Path 2: wrap login / register so consume fires right after a successful
+      // auth. Keep the originals untouched (capture-then-replace pattern).
+      var self = App.Auth;
+      var originalLogin = self.login;
+      var originalRegister = self.register;
+      self.login = function (email, password) {
+        var p = originalLogin.call(self, email, password);
+        if (p && typeof p.then === 'function') {
+          return p.then(function (res) {
+            if (res && res.success) consumePendingInvite();
+            return res;
+          });
+        }
+        return p;
+      };
+      self.register = function (opts) {
+        var p = originalRegister.call(self, opts);
+        if (p && typeof p.then === 'function') {
+          return p.then(function (res) {
+            if (res && res.success) consumePendingInvite();
+            return res;
+          });
+        }
+        return p;
+      };
+    })();
+  </script>
 </body>
 </html>
