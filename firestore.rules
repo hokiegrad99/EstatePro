@@ -165,7 +165,35 @@ service cloud.firestore {
     // ---- estates/{estateId} ----
     // Phase 1: only "read if member" + "create via founder-bootstrap".
     match /estates/{estateId} {
-      allow read: if isMember(estateId);
+      // Phase 4 fix (array-contains query optimization).
+      //
+      // The earlier `      // Phase 4 array-contains query fix.
+      //
+      // The earlier `allow read: if isMember(estateId);` invoked Firestore's
+      // cross-doc `get()` inside a rule reached via App.Auth.getMyEstates's
+      // `array-contains` query. The engine can't fold a get()-bearing rule
+      // into the index/array-contains optimization pass, so it gave up and
+      // rejected the query with "Missing or insufficient permissions" --
+      // symptom: executor.html showed zero estates, role gate hid the
+      // create-invite card, even though the user had an Estate 1 doc with
+      // their uid in `memberIds[0]`.
+      //
+      // Replace the cross-doc get() with a self-only check (`resource.data`
+      // is the doc being read, so it's well-defined for a per-doc rule
+      // and folds into the array-contains optimization). `resource` is
+      // null when the doc doesn't exist, which is exactly the intent of
+      // the original `exists(...estates/{estateId}) && ...memberIds` gate,
+      // so the new rule is equivalent for reads.
+      //
+      // Cross-doc `get()` is still used by:
+      //   - the executor-write branch on `/estates/{estateId}` (writes
+      //     don't go through array-contains optimization),
+      //   - `/invites/{inviteId}` create/delete rules
+      //     (same reason -- writes),
+      //   - `/invites/{inviteId}` read rule (subcollection reads don't
+      //     hit array-contains, so get() works there too).
+      // Phase 4 array-contains fix: rules used cross-doc get() which Firestore cannot fold into an array-contains query; self-only check against resource.data.memberIds folds in and is equivalent for reads.
+      allow read: if isSignedIn() && request.auth.uid in resource.data.memberIds;
 
       // Founder bootstrap path. Caller must:
       //   1. Be signed in.
@@ -229,6 +257,20 @@ service cloud.firestore {
         // added, one pending-invite removed, nested invite subdoc claimed
         // atomically client-side via runTransaction).
         || (isInviteConsumption()
+            // Invite-consume allow pendingInvites to SHRINK by exactly one
+            // (the consumed inviteId key cleanup, written via dot-notation
+            // FieldValue.delete() in App.Auth.consumeInviteFromUrl) or to
+            // stay at the same size (if the parent map didn't track this
+            // specific inviteId -- the direct createInvite path populates
+            // only the subcollection, not the parent map; the cache is
+            // populated only when going through createInviteLink Cloud
+            // Function). We must NOT allow growth because a joiner doing so
+            // would be hijacking executor invite-issuance authority.
+            // Equality is NOT valid here (the legitimate flow mutates the
+            // map) and `==` is too strict for the dot-notation delete case.
+            && (!('pendingInvites' in request.resource.data)
+                || request.resource.data.pendingInvites.size()
+                   <= resource.data.pendingInvites.size())
             && isValidEstateShape(request.resource.data));
 
       // Phase 4 will add: allow delete for executors.
@@ -262,6 +304,7 @@ service cloud.firestore {
         allow update: if isSignedIn()
           && request.auth.token.email == resource.data.inviteeEmail
           && resource.data.redeemedBy == null
+          && request.resource.data.redeemedBy == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['redeemedBy', 'redeemedAt']);
         // Delete: executor of the parent estate, and only an UNREDEEMED
         // invite (so revocation can't yank an already-claimed seat).
