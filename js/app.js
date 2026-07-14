@@ -386,17 +386,16 @@ const App = window.App = Object.assign(window.App || {}, {
             if (!['executor', 'heir', 'beneficiary'].includes(role)) {
               throw new Error('Invite has an invalid role: ' + role);
             }
-            var estSnap = await tx.get(estRef);
-            if (!estSnap.exists) throw new Error('Estate document not found.');
-            // Pre-compute the parent-doc mutations against the SIDE snapshot
-            // we just read; we keep all writes for PHASE 2 below.
-            var newMemberIds = (estSnap.get('memberIds') || []).concat([u.uid]);
-            var newRoles = Object.assign({}, estSnap.get('roles') || {});
-            newRoles[u.uid] = role;
-            // Drop our invite key from pendingInvites (if map-based; Phase 1 created it as empty {}).
-            var pi = estSnap.get('pendingInvites') || {};
-            var piUpdate = {};
-            if (inviteId in pi) { piUpdate['pendingInvites.' + inviteId] = firebase.firestore.FieldValue.delete(); }
+            // (intentionally NOT tx.get(estRef): the read rule for
+            //  /estates/{estateId} is `uid in resource.data.memberIds`. The
+            //  heir isn't yet a member -- that IS what consume adds -- so any
+            //  client-side read of the estate doc is rejected with "Missing
+            //  or insufficient permissions". We sidestep the read entirely
+            //  by using FieldValue.arrayUnion() and the dot-notation write
+            //  'roles.<uid>'; isInviteConsumption() in firestore.rules
+            //  validates request.resource.data against resource.data on
+            //  the SERVER side, where the rule engine has direct access to
+            //  resource.data without our client ever having to read it.)
 
             // ---- PHASE 2: ALL writes now that reads are done. ----
             // (c) Mark the subdoc as redeemed.
@@ -404,12 +403,21 @@ const App = window.App = Object.assign(window.App || {}, {
               redeemedBy: u.uid,
               redeemedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
-            // (d) Update parent doc.
-            tx.update(estRef, Object.assign({
-              memberIds: newMemberIds,
-              roles: newRoles,
+            // (d) Update parent doc -- arrayUnion + dot-notation roles.<uid>.
+            // FieldValue.arrayUnion(u.uid) resolves server-side to "old +
+            // [uid]" (size += 1, last element = uid), satisfying
+            // isInviteConsumption()'s size-and-tail check. The 'roles.<uid>'
+            // field-path write hits only the new nested key, so existing
+            // executor/heir/beneficiary role entries are untouched.
+            // pendingInvites is intentionally NOT modified: the rule's
+            // pendingInvites.size() <= resource.data.pendingInvites.size()
+            // holds because equality is the strongest <=.
+            var estRefUpdate = {
+              memberIds: firebase.firestore.FieldValue.arrayUnion(u.uid),
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, piUpdate));
+            };
+            estRefUpdate['roles.' + u.uid] = role;
+            tx.update(estRef, estRefUpdate);
           });
           // Active estate switched -- the new member now has access.
           if (App.Data && App.Data._currentEstateId !== estateId) {
@@ -419,6 +427,126 @@ const App = window.App = Object.assign(window.App || {}, {
           return { success: true, message: 'Welcome! You now have access to the estate.' };
         } catch (err) {
           return { success: false, message: err && err.message ? err.message : 'Could not consume invite.' };
+        }
+      },
+
+      // ---- deleteInvite ----
+      // Called from the executor's Pending Invitations card. Deletes an
+      // UNREDEEMED invite subdoc. Rules (in firestore.rules) gate this to
+      // executors of the parent estate AND require resource.data.redeemedBy
+      // == null, so a redeemed invite cannot be retroactively revoked --
+      // the joiner keeps their seat. Returns { success, message }; on
+      // success the caller should re-render the pending-invites list.
+      //
+      // We intentionally do NOT confirm with the caller here -- the UI layer
+      // owns that (window.revokeInvite in executor.html). Keeping client
+      // prompts out of this method lets future programmatic callers (a
+      // batch-cleanup tool, a Cloud Function trigger, etc.) skip the
+      // modal step by calling this directly.
+      async deleteInvite(estateId, inviteId) {
+        var u = App.Auth.getCurrentUser();
+        if (!u) return { success: false, message: 'Not signed in.' };
+        if (!App.Firebase || !App.Firebase.db) {
+          return { success: false, message: 'Firestore not initialized.' };
+        }
+        if (!estateId || !inviteId) return { success: false, message: 'Missing invite parameters.' };
+        try {
+          await App.Firebase.db.collection('estates').doc(estateId)
+            .collection('invites').doc(inviteId).delete();
+          return { success: true, message: 'Invite revoked.' };
+        } catch (err) {
+          return {
+            success: false,
+            message: 'Could not revoke invite: ' + (err && err.message ? err.message : err)
+          };
+        }
+      },
+
+      // ---- updateMemberRole ----
+      // Phase 5: the executor's wrapper for changing an EXISTING member's
+      // role (e.g. heir -> beneficiary). Reads the current estate doc (we
+      // ARE a member so the read rule permits it), constructs a NEW roles
+      // map with exactly one entry's value changed, then issues a single
+      // .update() call. The isModifyMemberRole rule branch enforces:
+      //   - exactly one roles key changed, others identical;
+      //   - the new value is in [executor, heir, beneficiary];
+      //   - memberIds unchanged;
+      //   - at least one executor remains afterwards (last-executor guard).
+      // We do the diff client-side because Firestore rules can read the diff
+      // but cannot compute "modify X to Y" without an explicit target field
+      // on the request payload -- which we'd rather not add to /estates/{id}.
+      async updateMemberRole(estateId, targetUid, newRole) {
+        var u = App.Auth.getCurrentUser();
+        if (!u) return { success: false, message: 'Not signed in.' };
+        if (!App.Firebase || !App.Firebase.db) {
+          return { success: false, message: 'Firestore not initialized.' };
+        }
+        if (!['executor', 'heir', 'beneficiary'].includes(newRole)) {
+          return { success: false, message: 'Invalid role. Use executor / heir / beneficiary.' };
+        }
+        if (!estateId || !targetUid) return { success: false, message: 'Missing parameters.' };
+        try {
+          var estRef = App.Firebase.db.collection('estates').doc(estateId);
+          var snap = await estRef.get();
+          if (!snap.exists) return { success: false, message: 'Estate not found.' };
+          var cur = snap.data();
+          var curRoles = (cur && cur.roles) || {};
+          if (!(targetUid in curRoles)) {
+            return { success: false, message: 'Target is not a member of this estate.' };
+          }
+          if (curRoles[targetUid] === newRole) {
+            return { success: false, message: 'Role is already set to that value.' };
+          }
+          var newRoles = Object.assign({}, curRoles);
+          newRoles[targetUid] = newRole;
+          await estRef.update({ roles: newRoles });
+          return { success: true, message: 'Role updated.' };
+        } catch (err) {
+          return {
+            success: false,
+            message: 'Could not update role: ' + (err && err.message ? err.message : err)
+          };
+        }
+      },
+
+      // ---- removeMember ----
+      // Phase 5: removes a uid from BOTH the memberIds array AND the roles
+      // map. Last-executor safety is enforced entirely server-side by the
+      // isRemoveMember() rule branch (see firestore.rules); if we attempt to
+      // remove the last executor, Firestore rejects the .update() and the
+      // catch block surfaces "Missing or insufficient permissions" to the
+      // executor. We do the diff client-side so the rule's
+      // roles.diff().affectedKeys().hasOnly([removedKey]) check is naturally
+      // satisfied without us adding a targetUid field to the request payload.
+      async removeMember(estateId, targetUid) {
+        var u = App.Auth.getCurrentUser();
+        if (!u) return { success: false, message: 'Not signed in.' };
+        if (!App.Firebase || !App.Firebase.db) {
+          return { success: false, message: 'Firestore not initialized.' };
+        }
+        if (!estateId || !targetUid) return { success: false, message: 'Missing parameters.' };
+        try {
+          var estRef = App.Firebase.db.collection('estates').doc(estateId);
+          var snap = await estRef.get();
+          if (!snap.exists) return { success: false, message: 'Estate not found.' };
+          var cur = snap.data();
+          var curMemberIds = (cur && cur.memberIds) || [];
+          if (curMemberIds.indexOf(targetUid) < 0) {
+            return { success: false, message: 'Target is not a member of this estate.' };
+          }
+          var newMemberIds = curMemberIds.filter(function (id) { return id !== targetUid; });
+          var newRoles = Object.assign({}, (cur && cur.roles) || {});
+          delete newRoles[targetUid];
+          await estRef.update({
+            memberIds: newMemberIds,
+            roles: newRoles
+          });
+          return { success: true, message: 'Member removed.' };
+        } catch (err) {
+          return {
+            success: false,
+            message: 'Could not remove member: ' + (err && err.message ? err.message : err)
+          };
         }
       }
     },

@@ -319,6 +319,46 @@
           </div>
         </div>
       </div>
+
+      <!-- Phase 5: Estate Members (executor-only) -->
+      <div class="card" id="membersCard" style="margin-top:1.5rem; display:none;">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 00-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 010 7.75"></path>
+            </svg>
+            Estate Members
+          </div>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom:0.75rem; font-size:0.85rem; color:var(--text-secondary);">
+            Current members of this estate. Change a member's role (heir &rarr; beneficiary, etc.) or remove them from this estate. The last executor cannot be removed; doing so requires retiring the entire estate via your Firebase Admin console.
+          </p>
+          <div class="table-responsive">
+            <table class="data-table" id="membersTable">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Role</th>
+                  <th class="no-print">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div id="membersMessages" style="margin-top:0.5rem;"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:1.5rem;">
+        <div class="card-header">
+          <div class="card-title"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Export</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <!-- Firebase compat SDK (must load before firebase-bridge.js) -->
@@ -630,9 +670,27 @@
                 '<div style="font-weight:600;">' + App.UI.escapeHtml(d.inviteeEmail) + '</div>' +
                 '<div style="font-size:0.8rem; color:var(--text-secondary);">role: ' + App.UI.escapeHtml(d.role) + ' &middot; created ' + when + '</div>' +
               '</div>' +
-              '<button type="button" class="btn btn-sm btn-secondary" onclick="copyShareInviteUrl(\'' + App.UI.escapeHtml(inv.url) + '\')">Copy link</button>' +
-            '</div>';
-          }).join('');
+            '<button type="button" class="btn btn-sm btn-secondary" onclick="copyShareInviteUrl(\'' + App.UI.escapeHtml(inv.url) + '\')">Copy link</button>' +
+            '<button type="button" class="btn btn-sm btn-danger" data-revoke-invite="' + App.UI.escapeHtml(inv.id) + '" data-revoke-email="' + App.UI.escapeHtml(d.inviteeEmail) + '">Revoke</button>' +
+          '</div>';
+        }).join('');
+
+        // Phase 5 revoke: a single delegated click handler on listEl catches
+        // Revoke clicks for any current-and-future invite card. data-* attribs
+        // carry the IDs / display email without inlining any user-controlled
+        // text into a JS string literal, so an apostrophe or quote in d.inviteeEmail
+        // can't break the handler. Wire-once flag (dataset.revokeWired) survives
+        // the re-render that createInvite's success path triggers.
+        if (!listEl.dataset.revokeWired) {
+          listEl.addEventListener('click', function (ev) {
+            var btn = ev.target.closest && ev.target.closest('button[data-revoke-invite]');
+            if (!btn || !listEl.contains(btn)) return;
+            var inviteId = btn.getAttribute('data-revoke-invite');
+            var email = btn.getAttribute('data-revoke-email');
+            revokeInvite(App.Data.getCurrentEstateId(), inviteId, email);
+          });
+          listEl.dataset.revokeWired = '1';
+        }
         } catch (e) {
           var msg = (e && e.message) ? e.message : 'Unknown Firestore error.';
           // Phase 4 fix: surface the actual error so an executor who just
@@ -653,6 +711,155 @@
       window.copyShareInviteUrl = function (url) {
         try { navigator.clipboard.writeText(url).then(function () { alert('Invite link copied.'); }); }
         catch (err) { prompt('Copy this invite link:', url); }
+      };
+
+      // Phase 5 revoke: confirm-then-delete an unredeemed invite. Reuses the
+      // #inviteFormResult slot already used by createInvite so creation and
+      // revocation feedback live in one visible area under the create form.
+      // On success we re-render so the deleted invite vanishes immediately.
+      window.revokeInvite = async function (estateId, inviteId, email) {
+        if (!estateId || !inviteId) return;
+        var display = email || '(unknown address)';
+        var ok = window.confirm('Revoke the invitation for ' + display + '?\n\nThis permanently deletes the invite. Anyone holding the link will see a "revoked" error when they try to use it.');
+        if (!ok) return;
+        var resultEl = document.getElementById('inviteFormResult');
+        try {
+          var res = await App.Auth.Invite.deleteInvite(estateId, inviteId);
+          if (res && res.success) {
+            if (resultEl) resultEl.innerHTML = '<div class="alert alert-success">Invite for ' + App.UI.escapeHtml(display) + ' has been revoked.</div>';
+            renderShareInvites();
+          } else {
+            if (resultEl) resultEl.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(res && res.message ? res.message : 'Could not revoke invite.') + '</div>';
+          }
+        } catch (err) {
+          if (resultEl) resultEl.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(err && err.message ? err.message : 'Unknown error') + '</div>';
+        }
+      };
+
+      // ---- Phase 5: renderMembers + changeMemberRole + removeMemberAction ----
+      async function renderMembers() {
+        var card = document.getElementById('membersCard');
+        if (!card) return;
+        var currentUser = App.Auth.getCurrentUser();
+        var estate = App.Data.getEstate();
+        var memberIds = (estate && estate.memberIds) || [];
+        var roles = (estate && estate.roles) || {};
+        // Hide the card entirely for non-executors; the rules also reject
+        // writes from non-executors, so this is defense-in-depth.
+        if (!currentUser || roles[currentUser.uid] !== 'executor') {
+          card.style.display = 'none';
+          return;
+        }
+        card.style.display = '';
+        var tbody = document.querySelector('#membersTable tbody');
+        var html = memberIds.map(function (uid) {
+          var role = roles[uid] || '(none)';
+          var isSelf = currentUser && uid === currentUser.uid;
+          // Firebase uids are alphanumeric in practice, but escapeHtml anyway
+          // as defense-in-depth before they touch any DOM.
+          var shortUid = uid.length > 12 ? uid.substring(0, 7) + '\u2026' + uid.substring(uid.length - 3) : uid;
+          var badgeClass =
+            role === 'executor' ? 'badge-info' :
+            role === 'heir' ? 'badge-warning' :
+            role === 'beneficiary' ? 'badge-success' :
+            'badge-default';
+          // The data-change-role-uid attribute lets us read the uid from the
+          // element at click-time -- safer than inlining the uid into an
+          // onclick string literal in case a future Firebase format ever
+          // produces quotes or backslashes in a uid.
+          var actionCell =
+            '<select class="form-select form-select-sm" data-change-role-uid="' + App.UI.escapeHtml(uid) + '" onchange="window.changeMemberRoleByData(this)">' +
+              '<option value="executor"' + (role === 'executor' ? ' selected' : '') + '>Executor</option>' +
+              '<option value="heir"' + (role === 'heir' ? ' selected' : '') + '>Heir</option>' +
+              '<option value="beneficiary"' + (role === 'beneficiary' ? ' selected' : '') + '>Beneficiary</option>' +
+            '</select>' +
+            '<button type="button" class="btn btn-sm btn-danger" data-remove-member-uid="' + App.UI.escapeHtml(uid) + '" onclick="window.removeMemberActionByData(this)"' +
+              (isSelf ? ' disabled title="You cannot remove yourself. Have another executor demote you first, then remove you."' : '') +
+            '>Remove</button>';
+          return '<tr>' +
+            '<td><code style="font-size:0.85rem;">' + App.UI.escapeHtml(shortUid) + '</code>' +
+              (isSelf ? ' <span class="badge badge-info">You</span>' : '') + '</td>' +
+            '<td><span class="badge ' + badgeClass + '">' + App.UI.escapeHtml(role) + '</span></td>' +
+            '<td class="no-print">' + actionCell + '</td>' +
+          '</tr>';
+        }).join('');
+        if (!html) {
+          html = '<tr><td colspan="3" style="text-align:center; color:var(--text-secondary);">No members yet.</td></tr>';
+        }
+        tbody.innerHTML = html;
+      }
+
+      // Phase 5: read the target uid from the data attribute (avoids inline-
+      // JS string-injection concerns), then delegate to window.changeMemberRole.
+      window.changeMemberRoleByData = function (sel) {
+        var uid = sel.getAttribute('data-change-role-uid');
+        var newRole = sel.value;
+        window.changeMemberRole(uid, newRole);
+      };
+
+      // Same pattern for Remove buttons (uses data-remove-member-uid).
+      window.removeMemberActionByData = function (btn) {
+        var uid = btn.getAttribute('data-remove-member-uid');
+        if (!uid) return;
+        window.removeMemberAction(uid);
+      };
+
+      window.changeMemberRole = async function (uid, newRole) {
+        if (!uid || !newRole) return;
+        var estateId = App.Data.getCurrentEstateId();
+        if (!estateId) return;
+        var shortUid = uid.length > 12 ? uid.substring(0, 7) + '\u2026' + uid.substring(uid.length - 3) : uid;
+        var msgEl = document.getElementById('membersMessages');
+        if (msgEl) msgEl.innerHTML = '<div class="alert alert-info">Updating role for ' + App.UI.escapeHtml(shortUid) + '\u2026</div>';
+        try {
+          var res = await App.Auth.Invite.updateMemberRole(estateId, uid, newRole);
+          if (res && res.success) {
+            if (msgEl) msgEl.innerHTML = '<div class="alert alert-success">Role updated to <strong>' + App.UI.escapeHtml(newRole) + '</strong> for ' + App.UI.escapeHtml(shortUid) + '.</div>';
+            // Reload so App.Data._cache re-binds to fresh Firestore state (so
+            // the executor's own canEdit / canManageUsers reflect any role
+            // changes, and other pages see the new state).
+            setTimeout(function () { window.location.reload(); }, 600);
+          } else {
+            if (msgEl) msgEl.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(res && res.message ? res.message : 'Could not update role.') + '</div>';
+          }
+        } catch (err) {
+          if (msgEl) msgEl.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(err && err.message ? err.message : 'Unknown error') + '</div>';
+        }
+      };
+
+      window.removeMemberAction = async function (uid) {
+        if (!uid) return;
+        // Defensive pre-check: refuse UI-side if we'd remove the last executor.
+        // The rule's isRemoveMember last-executor guard is the real enforcement;
+        // this just gives a clearer error than a permission denial.
+        var estate = App.Data.getEstate();
+        var roles = (estate && estate.roles) || {};
+        var executorCount = 0;
+        for (var k in roles) { if (Object.prototype.hasOwnProperty.call(roles, k) && roles[k] === 'executor') executorCount++; }
+        var targetIsLastExecutor = executorCount === 1 && roles[uid] === 'executor';
+        if (targetIsLastExecutor) {
+          var msgElPre = document.getElementById('membersMessages');
+          if (msgElPre) msgElPre.innerHTML = '<div class="alert alert-danger">This is the sole executor. Promote another member to executor first, then they can demote and remove you.</div>';
+          return;
+        }
+        var shortUid = uid.length > 12 ? uid.substring(0, 7) + '\u2026' + uid.substring(uid.length - 3) : uid;
+        var ok = window.confirm('Remove ' + shortUid + ' from this estate?\n\nThey will lose access after page refresh. You\'ll need to mint a fresh invite if you want to re-admit them.');
+        if (!ok) return;
+        var estateId = App.Data.getCurrentEstateId();
+        if (!estateId) return;
+        var msgEl = document.getElementById('membersMessages');
+        if (msgEl) msgEl.innerHTML = '<div class="alert alert-info">Removing ' + App.UI.escapeHtml(shortUid) + '\u2026</div>';
+        try {
+          var res = await App.Auth.Invite.removeMember(estateId, uid);
+          if (res && res.success) {
+            if (msgEl) msgEl.innerHTML = '<div class="alert alert-success">' + App.UI.escapeHtml(shortUid) + ' has been removed from this estate.</div>';
+            setTimeout(function () { window.location.reload(); }, 600);
+          } else {
+            if (msgEl) msgEl.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(res && res.message ? res.message : 'Could not remove member.') + '</div>';
+          }
+        } catch (err) {
+          if (msgEl) msgEl.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(err && err.message ? err.message : 'Unknown error') + '</div>';
+        }
       };
 
       document.getElementById('inviteForm').addEventListener('submit', async function (e) {
@@ -686,6 +893,7 @@
       App.onReady(function () {
         renderExecutor();
         renderShareInvites();
+        renderMembers();
       });
       });
     })();
