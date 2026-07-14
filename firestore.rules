@@ -125,16 +125,27 @@ service cloud.firestore {
     // estate can never become write-locked from the client side. Retiring the
     // entire estate is intentionally NOT supported from the client; it goes
     // through a future Cloud Function with admin privileges.
-    function isModifyMemberRole() {
-      let changedKey = request.resource.data.roles.diff(resource.data.roles).affectedKeys()[0];
-      let newRole = request.resource.data.roles[changedKey];
+    function isModifyMemberRole(estateId) {
+      let rolesDiff = request.resource.data.roles.diff(resource.data.roles);
       return isSignedIn()
         && isMember(estateId)
         && resource.data.roles[request.auth.uid] == 'executor'
-        // Total diff must affect exactly one key (value changed, no adds/removes).
-        && request.resource.data.roles.diff(resource.data.roles).affectedKeys().size() == 1
-        // Same key set (no adds/removes -- distinguishes this from isRemoveMember).
-        && request.resource.data.roles.keys() == resource.data.roles.keys()
+        // Exactly one role key's value changed; no adds, no removes.
+        // We use addedKeys()/removedKeys()/changedKeys()/.size() instead of
+        // indexing `affectedKeys()[0]` because Firestore's CEL engine returns
+        // `affectedKeys()` as a SET (confirmed by linter warning: "Received
+        // one of [set]"). [0] indexing on a set is a runtime error, which the
+        // engine silently turns into permission denied — the exact symptom
+        // that surfaced on first deploy.
+        && rolesDiff.addedKeys().size()   == 0
+        && rolesDiff.removedKeys().size() == 0
+        && rolesDiff.changedKeys().size() == 1
+        // Every value in the new roles map must be a valid role (catches role spoofing).
+        && request.resource.data.roles.values().hasOnly(['executor', 'heir', 'beneficiary'])
+        // Last-executor guard: if an executor existed before, must remain after.
+        && (resource.data.roles.values().hasAny(['executor'])
+              ? request.resource.data.roles.values().hasAny(['executor'])
+              : true)
         // memberIds / pendingInvites / structural fields unchanged.
         && request.resource.data.memberIds      == resource.data.memberIds
         && request.resource.data.pendingInvites == resource.data.pendingInvites
@@ -142,44 +153,41 @@ service cloud.firestore {
             || request.resource.data.__founderSecret == resource.data.__founderSecret)
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
-        // Single changed key's new value is a valid role, different from old.
-        && newRole is string
-        && (newRole in ['executor', 'heir', 'beneficiary'])
-        && newRole != resource.data.roles[changedKey]
-        // LAST-EXECUTOR GUARD: at least one 'executor' must remain after.
-        && (resource.data.roles.values().hasAny(['executor'])
-              ? request.resource.data.roles.values().hasAny(['executor'])
-              : true);
+        && isValidEstateShape(request.resource.data);
     }
 
-    function isRemoveMember() {
-      let removedKey = request.resource.data.roles.diff(resource.data.roles).affectedKeys()[0];
+    function isRemoveMember(estateId) {
+      let rolesDiff = request.resource.data.roles.diff(resource.data.roles);
       return isSignedIn()
         && isMember(estateId)
         && resource.data.roles[request.auth.uid] == 'executor'
-        // Exactly one memberId removed + exactly one role entry removed.
+        // Exactly one member removed from BOTH memberIds and roles keys.
         && request.resource.data.memberIds.size() == resource.data.memberIds.size() - 1
         && request.resource.data.roles.size()     == resource.data.roles.size()     - 1
-        // Total roles-diff affects exactly one key (the removed entry's slot).
-        && request.resource.data.roles.diff(resource.data.roles).affectedKeys().size() == 1
-        // That affected key was REMOVED (in resource but not in request).
-        && !(removedKey in request.resource.data.roles)
-        && (removedKey in resource.data.roles)
-        // Cross-check: same key removed from memberIds (size-1 above already enforces).
-        && !(removedKey in request.resource.data.memberIds)
+        // Roles diff: exactly one key REMOVED (not changed, not added). Same
+        // set-vs-list bypass as isModifyMemberRole -- never index the diff.
+        && rolesDiff.addedKeys().size()   == 0
+        && rolesDiff.changedKeys().size() == 0
+        && rolesDiff.removedKeys().size() == 1
+        // Cross-consistency: every memberId must have a role entry. Catches the
+        // "remove A from memberIds but accidentally remove the wrong uid from
+        // roles" ghost-member scenario. Strictly tighter than the previous
+        // addedItems().size()==0 check (impossible here, since the Firestore
+        // CEL engine rejects "+addedItems()" with "[W] Invalid function name").
+        && request.resource.data.roles.keys().hasAll(request.resource.data.memberIds)
+        // Remaining roles all valid.
+        && request.resource.data.roles.values().hasOnly(['executor', 'heir', 'beneficiary'])
+        // Last-executor guard.
+        && (resource.data.roles.values().hasAny(['executor'])
+              ? request.resource.data.roles.values().hasAny(['executor'])
+              : true)
         // pendingInvites / structural fields unchanged.
         && request.resource.data.pendingInvites == resource.data.pendingInvites
         && (!('__founderSecret' in request.resource.data)
             || request.resource.data.__founderSecret == resource.data.__founderSecret)
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
-        // LAST-EXECUTOR GUARD: if an executor existed before, at least one entry
-        // must remain after the proposed remove. Refuses to delete the last
-        // executor on the estate (the only way to do that is to retire the
-        // entire estate / invite a replacement first).
-        && (resource.data.roles.values().hasAny(['executor'])
-              ? request.resource.data.roles.values().hasAny(['executor'])
-              : true);
+        && isValidEstateShape(request.resource.data);
     }
 
     // ---- users/{userId} ----
@@ -343,9 +351,9 @@ service cloud.firestore {
         // Executor changes a single member's role OR removes a single member.
         // Both branches use isValidEstateShape to enforce the same Phase-3
         // schema invariants as the executor-write and consume-invite paths.
-        || (isModifyMemberRole()
+        || (isModifyMemberRole(estateId)
             && isValidEstateShape(request.resource.data))
-        || (isRemoveMember()
+        || (isRemoveMember(estateId)
             && isValidEstateShape(request.resource.data));
 
       // Phase 4 will add: allow delete for executors.
