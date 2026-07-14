@@ -359,25 +359,37 @@ const App = window.App = Object.assign(window.App || {}, {
 
         try {
           await db.runTransaction(async function (tx) {
+            // ---- PHASE 1: ALL reads must happen before any writes. ----
+            // Firestore's runTransaction contract is strict: every tx.get()
+            // must complete before the first tx.update()/tx.set()/tx.delete().
+            // The earlier version did tx.get(invRef), then tx.update(invRef, ...),
+            // then tx.get(estRef) -- the second read after a write violates
+            // the contract and Firestore rejects the transaction with
+            // "Firestore transactions require all reads to be executed before
+            // all writes." We now do both reads up front, then both writes.
             var invSnap = await tx.get(invRef);
             if (!invSnap.exists) throw new Error('Invite has been revoked or never existed.');
             var inv = invSnap.data();
             if (inv.redeemedBy) throw new Error('This invite was already redeemed by ' + inv.redeemedBy + '.');
             if (inv.inviteeEmail && authEmail && inv.inviteeEmail.toLowerCase() !== authEmail.toLowerCase()) {
-              throw new Error('You must be signed in as ' + inv.inviteeEmail + ' to claim this invite.');
+              // Phase 4 fix: surface both emails in the error so the heir
+              // (or the executor) can see at a glance which email is
+              // mismatched. The previous phrasing ("You must be signed in as
+              // X") was correct but a single-email message -- test subjects
+              // were confused when they saw it because they didn't realize
+              // they were viewing it as a different identity than the invite
+              // was minted for. Naming both addresses collapses that
+              // ambiguity and tells them exactly what to do.
+              throw new Error('This invite was minted for ' + inv.inviteeEmail + ' but you are signed in as ' + authEmail + '. Sign in as ' + inv.inviteeEmail + ' (the address the executor used), OR ask the executor to issue a fresh invite addressed to ' + authEmail + '.');
             }
             var role = inv.role;
             if (!['executor', 'heir', 'beneficiary'].includes(role)) {
               throw new Error('Invite has an invalid role: ' + role);
             }
-            // (c) Mark the subdoc as redeemed.
-            tx.update(invRef, {
-              redeemedBy: u.uid,
-              redeemedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            // (d) Update parent doc.
             var estSnap = await tx.get(estRef);
             if (!estSnap.exists) throw new Error('Estate document not found.');
+            // Pre-compute the parent-doc mutations against the SIDE snapshot
+            // we just read; we keep all writes for PHASE 2 below.
             var newMemberIds = (estSnap.get('memberIds') || []).concat([u.uid]);
             var newRoles = Object.assign({}, estSnap.get('roles') || {});
             newRoles[u.uid] = role;
@@ -385,6 +397,14 @@ const App = window.App = Object.assign(window.App || {}, {
             var pi = estSnap.get('pendingInvites') || {};
             var piUpdate = {};
             if (inviteId in pi) { piUpdate['pendingInvites.' + inviteId] = firebase.firestore.FieldValue.delete(); }
+
+            // ---- PHASE 2: ALL writes now that reads are done. ----
+            // (c) Mark the subdoc as redeemed.
+            tx.update(invRef, {
+              redeemedBy: u.uid,
+              redeemedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            // (d) Update parent doc.
             tx.update(estRef, Object.assign({
               memberIds: newMemberIds,
               roles: newRoles,
@@ -1676,17 +1696,128 @@ const App = window.App = Object.assign(window.App || {}, {
       if (!contentEl) return;
       // Don't double-insert (init() may fire twice across bfcache restores).
       if (document.getElementById('noEstateBanner')) return;
+
+      // Phase 4 auto-consume fix: if sessionStorage has a pending invite
+      // URL, fire consumeInviteFromUrl right here -- on EVERY page, not
+      // just index.html. The original index.html IIFE only attempted the
+      // consume on index.html itself, and a SIGNED-IN user pasting the URL
+      // hits the same race: index.html's first script sees isLoggedIn()
+      // === true and runs `window.location.href = 'dashboard.html';
+      // return;` BEFORE handleInviteUrl can register its onAuthStateChanged
+      // listener or set sessionStorage. By also attempting the consume here
+      // (which App.UI.init fires on every page), we catch Path B:
+      //   1. Heir pastes URL while signed-in
+      //   2. index.html renders, handleInviteUrl sets sessionStorage
+      //   3. First script redirects to dashboard.html
+      //   4. dashboard.html loads, banner triggers, consume fires
+      //   5. On success: window.location.reload() picks up new memberIds
+      // sessionStorage is cleared in BOTH success and failure paths so we
+      // never loop. The deferred 800 ms banner render still runs if the
+      // consume fails -- the user then sees the email-mismatch explainer
+      // and Refresh data button as before.
+      var pendingRaw = null;
+      try { pendingRaw = sessionStorage.getItem('estatepro_pending_invite'); } catch (e) {}
+      if (pendingRaw) {
+        var pending = null;
+        try { pending = JSON.parse(pendingRaw); } catch (e) {}
+        if (pending && pending.estateId && pending.inviteId
+            && App.Auth && App.Auth.Invite
+            && typeof App.Auth.Invite.consumeInviteFromUrl === 'function') {
+          var self3 = this;
+          App.Auth.Invite.consumeInviteFromUrl(pending.estateId, pending.inviteId).then(function (res) {
+            try { sessionStorage.removeItem('estatepro_pending_invite'); } catch (e) {}
+            if (res && res.success) {
+              // Reload so initAsync re-queries with the new memberIds.
+              window.location.reload();
+              return;
+            }
+            // Failure: clear sessionStorage, then render the banner so the
+            // user sees the explainer (email mismatch detail, etc.).
+            self3._renderNoEstateBannerAfterWait(u, contentEl);
+          }).catch(function (err) {
+            try { sessionStorage.removeItem('estatepro_pending_invite'); } catch (e) {}
+            console.error('[EstatePro] banner auto-consume failed:', err && err.message);
+            self3._renderNoEstateBannerAfterWait(u, contentEl);
+          });
+          return;
+        }
+      }
+
+      // Phase 4 fix: defer DOM mutation by 800 ms so a fresh sign-in -- in
+      // particular the invite-URL consume path that promotes a user from
+      // "no estates" to "member of one estate" in a single event loop tick
+      // -- doesn't flash this banner mid-`App.Data.initAsync` round-trip. We
+      // re-check the early-exit conditions inside the deferred handler so a
+      // state that resolves to isReady=true during the wait is respected.
+      // The actual banner construction lives in _renderNoEstateBannerAfterWait
+      // to keep this method light.
+      var self = this;
+      setTimeout(function () {
+        if (App.Data && typeof App.Data.isReady === 'function' && App.Data.isReady()) return;
+        if (document.getElementById('noEstateBanner')) return;
+        if (!App.Auth.getCurrentUser()) return;
+        if (document.body.classList.contains('login-page')) return;
+        var contentEl2 = document.querySelector('.content');
+        if (!contentEl2) return;
+        self._renderNoEstateBannerAfterWait(u, contentEl2);
+      }, 800);
+    },
+
+    _renderNoEstateBannerAfterWait(u, contentEl) {
       var banner = document.createElement('div');
       banner.id = 'noEstateBanner';
       banner.setAttribute('role', 'alert');
       banner.setAttribute('aria-live', 'polite');
-      banner.style.cssText = 'margin:1.5rem auto; padding:1.75rem 1.5rem; max-width:560px; text-align:center; background:rgba(220,38,38,0.04); border:1px solid var(--danger-color); border-radius:var(--radius);';
+      banner.style.cssText = 'margin:1.5rem auto; padding:1.75rem 1.5rem; max-width:600px; text-align:center; background:rgba(220,38,38,0.04); border:1px solid var(--danger-color); border-radius:var(--radius);';
+      // Phase 4 fix: prominent email banner + explicit email-mismatch hint.
+      // The previous wording told heirs to "paste your invite URL", which is
+      // great for users with a still-valid pending invite but misleading for
+      // heirs who ALREADY consumed (or tried to consume) an invite issued
+      // for a different address -- the symptom in the field. Surface both
+      // paths so the user can act on whichever applies.
+      var email = u.email || u.uid || '(unknown)';
       banner.innerHTML =
-        '<h3 style="margin:0 0 0.6rem 0; color:var(--text-primary);">You don\u2019t have access to any estate yet</h3>' +
-        '<p style="color:var(--text-secondary); margin:0 0 0.75rem 0;">If you have an estate invitation link, paste it into your browser\u2019s address bar. ' +
-        'It will sign you in (or register you) and apply the invitation automatically.</p>' +
-        '<p style="color:var(--text-secondary); font-size:0.85rem; margin:0 0 0.75rem 0;">Otherwise, ask the executor of the estate to send you an invitation.</p>' +
-        '<p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Signed in as <strong style="color:var(--text-primary);">' + App.UI.escapeHtml(u.email || u.uid) + '</strong></p>';
+        '<h3 style="margin:0 0 0.75rem 0; color:var(--text-primary);">You don\u2019t have access to any estate yet</h3>' +
+        '<div style="margin:0 0 1rem 0; padding:0.5rem 0.75rem; background:var(--bg-primary); border-radius:var(--radius); display:inline-block;">' +
+          '<span style="color:var(--text-secondary); font-size:0.8rem;">Signed in as</span><br>' +
+          '<strong style="color:var(--text-primary); font-size:1.05rem; font-family:monospace; word-break:break-all;">' + App.UI.escapeHtml(email) + '</strong>' +
+        '</div>' +
+        '<p style="color:var(--text-secondary); margin:0 0 0.75rem 0;">If you have an estate invitation link, paste it into your browser\u2019s address bar \u2014 it will sign you in (or register you) and apply the invitation automatically.</p>' +
+        '<p style="color:var(--text-secondary); font-size:0.85rem; margin:0 0 0.75rem 0;">If you already tried pasting an invite and it didn\u2019t work, the executor most likely sent it for <em>a different email than the one above</em>. Either sign in with the exact email the executor addressed the invite to, or ask the executor to mint a fresh invite addressed to <strong style="color:var(--text-primary); font-family:monospace; word-break:break-all;">' + App.UI.escapeHtml(email) + '</strong>.</p>' +
+        '<p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">Otherwise, ask the executor of the estate to send you an invitation.</p>';
+      // "Refresh data" affordance: re-runs getMyEstates and reloads if the
+      // user has been silently added to an estate since this page first
+      // rendered (e.g., executor just minted and we lost a race). Without
+      // this, the only way out was a hard refresh (Cmd/Ctrl-R) which can be
+      // confusing for end users.
+      var refreshBtn = document.createElement('button');
+      refreshBtn.type = 'button';
+      refreshBtn.className = 'btn btn-sm btn-secondary';
+      refreshBtn.style.cssText = 'margin-top:1.25rem;';
+      refreshBtn.textContent = 'Refresh data';
+      refreshBtn.onclick = function () {
+        if (!App.Auth || typeof App.Auth.getMyEstates !== 'function') {
+          refreshBtn.textContent = 'No auth available';
+          return;
+        }
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = 'Checking\u2026';
+        App.Auth.getMyEstates().then(function (estates) {
+          if (Array.isArray(estates) && estates.length > 0 && App.Data) {
+            App.Data._currentEstateId = estates[0].id;
+            App.Data._cache = App.Data._normalize(estates[0]._doc);
+            window.location.reload();
+          } else {
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = 'Still empty \u2014 retry';
+          }
+        }).catch(function (err) {
+          console.error('[EstatePro] noEstateBanner refresh failed:', err && err.message);
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = 'Error \u2014 see console';
+        });
+      };
+      banner.appendChild(refreshBtn);
       contentEl.prepend(banner);
     },
 
