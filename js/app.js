@@ -1417,6 +1417,15 @@ const App = window.App = Object.assign(window.App || {}, {
       // Init user menu dropdown on logged-in pages
       this.initUserMenu();
 
+      // Phase 4 defensive: surface a "no estate access" banner for any
+      // signed-in user whose getMyEstates() returned []. Without this,
+      // every signed-in page renders $0/0 tables because App.Data.initAsync
+      // hits the empty-estate branch and the user has no idea why. Skipped
+      // on the login page (which has its own bootstrap hint).
+      if (!document.body.classList.contains('login-page')) {
+        this._maybeShowNoEstateBanner();
+      }
+
       // Phase 4: sidebar estate selector. No-op on pages that don't have the
       // selector slot, and hidden when the user has only one estate.
       this.initEstateSelector();
@@ -1626,6 +1635,43 @@ const App = window.App = Object.assign(window.App || {}, {
     },
 
     // User menu dropdown
+    // Phase 4 defensive helper: render a clear banner explaining why
+    // the user sees empty data tables on every page. Triggered when
+    // App.Data.isReady() returns false despite a signed-in Firebase user
+    // (i.e. getMyEstates() returned [] because their uid is not in any
+    // estate's memberIds). The banner names the cause and points the user
+    // at the immediate remediation (paste their invite URL into the
+    // address bar, or ask the executor for a new invite). Render functions
+    // on each page still run and will show $0 / empty rows; the banner
+    // sits at the top of .content so the explanation is clear.
+    _maybeShowNoEstateBanner() {
+      // No-op when the in-memory cache is bound to a real estate.
+      if (App.Data && typeof App.Data.isReady === 'function' && App.Data.isReady()) return;
+      // No-op on the login page (it has its own bootstrap hint + invite URL
+      // banner via index.html).
+      if (document.body.classList.contains('login-page')) return;
+      // No-op when signed out.
+      var u = App.Auth.getCurrentUser();
+      if (!u) return;
+      // Pages without a `.content` slot don't need a banner.
+      var contentEl = document.querySelector('.content');
+      if (!contentEl) return;
+      // Don't double-insert (init() may fire twice across bfcache restores).
+      if (document.getElementById('noEstateBanner')) return;
+      var banner = document.createElement('div');
+      banner.id = 'noEstateBanner';
+      banner.setAttribute('role', 'alert');
+      banner.setAttribute('aria-live', 'polite');
+      banner.style.cssText = 'margin:1.5rem auto; padding:1.75rem 1.5rem; max-width:560px; text-align:center; background:rgba(220,38,38,0.04); border:1px solid var(--danger-color); border-radius:var(--radius);';
+      banner.innerHTML =
+        '<h3 style="margin:0 0 0.6rem 0; color:var(--text-primary);">You don\u2019t have access to any estate yet</h3>' +
+        '<p style="color:var(--text-secondary); margin:0 0 0.75rem 0;">If you have an estate invitation link, paste it into your browser\u2019s address bar. ' +
+        'It will sign you in (or register you) and apply the invitation automatically.</p>' +
+        '<p style="color:var(--text-secondary); font-size:0.85rem; margin:0 0 0.75rem 0;">Otherwise, ask the executor of the estate to send you an invitation.</p>' +
+        '<p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Signed in as <strong style="color:var(--text-primary);">' + App.UI.escapeHtml(u.email || u.uid) + '</strong></p>';
+      contentEl.prepend(banner);
+    },
+
     initUserMenu() {
       if (document.body.classList.contains('login-page')) return;
       const userInfo = document.querySelector('.user-info');
