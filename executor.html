@@ -634,7 +634,19 @@
             '</div>';
           }).join('');
         } catch (e) {
-          listEl.innerHTML = '<p style="color:var(--danger-color); margin:0;">Failed to load pending invitations.</p>';
+          var msg = (e && e.message) ? e.message : 'Unknown Firestore error.';
+          // Phase 4 fix: surface the actual error so an executor who just
+          // minted an invite can SEE why the Pending list looks empty
+          // instead of wondering if their create went through. If the
+          // underlying failure is the well-known missing composite index
+          // (firestore.indexes.json is empty by default and the
+          // (redeemedBy, createdAt) index must be deployed), append a
+          // copy-pastable fix hint.
+          var hint = '';
+          if (/index/i.test(msg)) {
+            hint = '<div style="margin-top:0.5rem; font-size:0.8rem; color:var(--text-secondary); font-family:monospace;">→ Fix: <code>firebase deploy --only firestore:indexes</code> (the composite index (redeemedBy ASC, createdAt DESC) on /invites is in <code>firestore.indexes.json</code> but not yet deployed).</div>';
+          }
+          listEl.innerHTML = '<div class="alert alert-danger" style="margin-bottom:0;">Failed to load pending invitations: ' + App.UI.escapeHtml(msg) + hint + '</div>';
         }
       }
 

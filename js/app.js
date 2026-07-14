@@ -301,8 +301,19 @@ const App = window.App = Object.assign(window.App || {}, {
       // ---- listPendingInvites ----
       // Query the subcollection and return only unredeemed entries. Executor
       // dashboard uses this to populate the "Pending Invitations" card.
+      //
+      // Phase 4 fix: stop silently swallowing the error. The previous version
+      // returned [] on ANY failure, which made the executor's "Pending
+      // Invitations" panel indistinguishable from "no invites exist" even when
+      // the underlying cause was a missing composite index on
+      // (redeemedBy, createdAt). We now re-throw so renderShareInvites's catch
+      // can surface the message verbatim, including the hint that an index
+      // deploy is needed -- exactly the actionable text the user needs when
+      // this query first goes wrong.
       async listPendingInvites(estateId) {
-        if (!App.Firebase || !App.Firebase.db) return [];
+        if (!App.Firebase || !App.Firebase.db) {
+          throw new Error('Firestore not initialized.');
+        }
         try {
           var snap = await App.Firebase.db.collection('estates').doc(estateId)
             .collection('invites')
@@ -315,8 +326,15 @@ const App = window.App = Object.assign(window.App || {}, {
             return { id: d.id, _doc: data, url: url };
           });
         } catch (e) {
-          console.warn('[EstatePro] listPendingInvites failed:', e && e.message);
-          return [];
+          var msg = (e && e.message) ? e.message : String(e);
+          console.error('[EstatePro] listPendingInvites failed:', msg);
+          // Append an actionable hint when the failure is the well-known
+          // missing-index error from Firestore. Console alone is not enough:
+          // the executor hits this exact catch from the shareInvitesCard path.
+          if (/index/i.test(msg)) {
+            msg += ' (likely cause: composite index (redeemedBy ASC, createdAt DESC) on /invites not deployed. Run `firebase deploy --only firestore:indexes`. The fix is also in firestore.indexes.json at the repo root -- just deploy it.)';
+          }
+          throw new Error(msg);
         }
       },
 
