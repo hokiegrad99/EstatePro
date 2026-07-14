@@ -214,7 +214,7 @@ const App = window.App = Object.assign(window.App || {}, {
     },
 
     checkSession() {
-      var u = this.getCurrentUser();
+      var u = App.Auth.getCurrentUser();
       if (!u) {
         window.location.href = 'index.html';
         return null;
@@ -227,7 +227,7 @@ const App = window.App = Object.assign(window.App || {}, {
     },
 
     async getMyEstates() {
-      var u = this.getCurrentUser();
+      var u = App.Auth.getCurrentUser();
       if (!u) return [];
       if (!App.Firebase || !App.Firebase.db) {
         console.warn('[EstatePro] getMyEstates: Firestore unavailable. ' +
@@ -268,7 +268,7 @@ const App = window.App = Object.assign(window.App || {}, {
       // the doc's inviteeEmail so the doc-id-in-URL doesn't grant any extra
       // privilege to a random viewer.
       async createInvite(estateId, role, inviteeEmail) {
-        var u = this.getCurrentUser();
+        var u = App.Auth.getCurrentUser();
         if (!u) return { success: false, message: 'Not signed in.' };
         if (!App.Firebase || !App.Firebase.db) {
           return { success: false, message: 'Firestore not initialized.' };
@@ -329,7 +329,7 @@ const App = window.App = Object.assign(window.App || {}, {
       //       and pendingInvites.size() -= 1 (via Firestore.FieldValue.delete if the invite id is a key).
       // Firestore's runTransaction rolls back both writes if either is rejected server-side.
       async consumeInviteFromUrl(estateId, inviteId) {
-        var u = this.getCurrentUser();
+        var u = App.Auth.getCurrentUser();
         if (!u) return { success: false, message: 'Not signed in.' };
         if (!App.Firebase || !App.Firebase.db) return { success: false, message: 'Firestore not initialized.' };
         if (!estateId || !inviteId) return { success: false, message: 'Missing invite parameters.' };
