@@ -430,12 +430,38 @@ const App = window.App = Object.assign(window.App || {}, {
     canEdit() {
       const user = App.Auth.getCurrentUser();
       if (!user) return false;
+      // Phase 4 fix: the Firestore-backed model puts authorization on the
+      // estate doc's `roles[uid]` map, NOT on a per-user `user.role` field,
+      // and _hydrateProfile always returns role:null. Without consulting
+      // estate roles here, applyPermissions() would never enable edit
+      // mode for a signed-in user -- every form input across the app would
+      // be disabled at boot, including the executor's invite form. The
+      // Share Estate Invitations card's own gate uses the same
+      // `estate.roles[uid] === 'executor'` check (see executor.html
+      // renderShareInvites). We mirror it here so the global edit gate and
+      // the card's gate stay in sync.
+      try {
+        const estate = (App.Data && typeof App.Data.getEstate === 'function')
+          ? App.Data.getEstate() : null;
+        const roles = (estate && estate.roles) || {};
+        if (roles[user.uid] === 'executor') return true;
+      } catch (e) { /* fall through silently -- never crash the gate */ }
       return user.role === 'Admin' || user.role === 'Executor';
     },
 
     canManageUsers() {
       const user = App.Auth.getCurrentUser();
       if (!user) return false;
+      // Phase 4 fix: only the active estate's executor can issue invites
+      // and clear estate data (these correspond to legacy "Admin" powers).
+      // Mirror canEdit's estate-roles lookup so the manage-gate consistently
+      // reflects Phase-4 authority.
+      try {
+        const estate = (App.Data && typeof App.Data.getEstate === 'function')
+          ? App.Data.getEstate() : null;
+        const roles = (estate && estate.roles) || {};
+        if (roles[user.uid] === 'executor') return true;
+      } catch (e) { /* fall through */ }
       return user.role === 'Admin';
     },
 
