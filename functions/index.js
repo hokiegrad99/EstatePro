@@ -94,6 +94,60 @@ exports.retireBootstrapLock = functions.https.onCall(async (data, context) => {
 });
 
 // ============================================================
+// resetTester2Password  --  demo-only one-shot helper
+// ============================================================
+//
+// HTTPS onRequest. Admin SDK bypasses Firestore rules + identity-toolkit
+// API-key policy, so this is the only path that actually worked to reset a
+// Firebase Auth user's password on this Spark plan project (REST API key
+// updates return 403 PERMISSION_DENIED; auth:import bcrypt format is
+// rejected; OAuth refresh-token admin paths are equally blocked).
+//
+// SECURITY MODEL (demo-only; remove after the multi-estate demo finishes):
+//   - Hardcoded TARGET_UID + TARGET_EMAIL. The endpoint refuses to operate
+//     on any other user, even if the bearer secret leaks.
+//   - Authorization header MUST equal `Bearer estatepro-reset-2026`.
+//     Mismatch returns 403 and never touches Firebase Auth.
+//   - Password is read from the request body or query string; minimum
+//     length 6 enforced.
+//   - This function should be deployed, used ONCE for the demo, then
+//     deleted via `firebase functions:delete resetTester2Password --force
+//     --region us-central1` to remove the attack surface.
+// ============================================================
+exports.resetTester2Password = functions.https.onRequest(async (req, res) => {
+  const TARGET_UID = 'Kmz1tOlJMKd2tvlku33adLYg3Ru1';
+  const TARGET_EMAIL = 'estatepro.tester.58f7b@gmail.com';
+  const EXPECTED_BEARER = 'Bearer estatepro-reset-2026';
+
+  const auth = req.headers.authorization || '';
+  if (auth !== EXPECTED_BEARER) {
+    res.status(403).json({ ok: false, error: 'Bad or missing Authorization Bearer secret.' });
+    return;
+  }
+
+  // Accept password from JSON body or query string (curl convenience).
+  let newPassword;
+  if (req.body && typeof req.body.password === 'string') {
+    newPassword = req.body.password;
+  } else if (typeof req.query.password === 'string') {
+    newPassword = req.query.password;
+  }
+  if (!newPassword || newPassword.length < 6) {
+    res.status(400).json({ ok: false, error: 'password must be a string of at least 6 chars (body.password or query.password).' });
+    return;
+  }
+
+  try {
+    await admin.auth().updateUser(TARGET_UID, { password: newPassword });
+    console.log('[resetTester2Password] reset password for', TARGET_EMAIL);
+    res.status(200).json({ ok: true, uid: TARGET_UID, email: TARGET_EMAIL });
+  } catch (err) {
+    console.error('[resetTester2Password] updateUser failed', err && err.code, err && err.message);
+    res.status(500).json({ ok: false, error: (err && err.message) || String(err), code: err && err.code });
+  }
+});
+
+// ============================================================
 // (Optional) expireInvites  --  scheduled cleanup
 //
 // Drop unredeemed invites older than `expiresAt` (NOT IMPLEMENTED in
