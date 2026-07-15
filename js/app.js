@@ -656,11 +656,20 @@ const App = window.App = Object.assign(window.App || {}, {
               email: (u.email || ''),
               claimedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
-            tx.update(userRef, {
+            // Phase 6 defensive fix: use set({merge: true}) instead of
+            // update() so the runTransaction works even if /users/{uid}
+            // doesn't yet exist (e.g., a user signed up under an older
+            // build that didn't write the profile doc on register, or
+            // whose doc was deleted). update() requires the doc to
+            // exist; set-with-merge creates it on-the-fly with the
+            // specified fields only. Other profile fields (displayName,
+            // createdAt) are NOT created by this path -- they're set
+            // when the user signs up via the register flow.
+            tx.set(userRef, {
               isAdmin: true,
               isAdminClaimed: true,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            }, { merge: true });
           });
           // Refresh the in-memory profile so the same-tab sidebar update
           // sees isAdmin=true without waiting for the next page reload.

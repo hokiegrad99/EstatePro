@@ -58,7 +58,22 @@ service cloud.firestore {
     // without runTransaction is rejected because the rule-engine can't observe
     // the lock being written in the same request. After the lock exists, this
     // branch is dead and an attacker can never mint themselves an Admin.
-    function claimFirstAdmin() {
+    // First-claim one-shot. A signed-in user can self-write
+    // {isAdmin:true, isAdminClaimed:true} ONLY when no platform_admin_lock
+    // exists yet, AND the transaction writes the lock atomically. existsAfter()
+    // forces that atomicity -- a malicious client issuing a single .update()
+    // without runTransaction is rejected because the rule-engine can't observe
+    // the lock being written in the same request. After the lock exists, this
+    // branch is dead and an attacker can never mint themselves an Admin.
+    //
+    // Phase 6 linter fix: pass `userId` as an explicit parameter. Earlier
+    // version referenced `userId` directly from the function body, which
+    // the Firestore CEL engine rejects with "[W] Invalid variable name:
+    // userId" -- function bodies do not capture path wildcards from match
+    // blocks (same root cause as the earlier `affectedKeys()[0]` warning).
+    // The callers are in `match /users/{userId}`, so they pass the value
+    // through explicitly here.
+    function claimFirstAdmin(userId) {
       return isSignedIn()
         && request.auth.uid == userId
         && !exists(/databases/$(database)/documents/_meta/platform_admin_lock)
@@ -241,7 +256,8 @@ service cloud.firestore {
         // transaction also write /_meta/platform_admin_lock (existsAfter);
         // the lock is the locking primitive that closes the race condition
         // for first-claim because it's !exists on entry and one-create-only.
-        || claimFirstAdmin();
+        // Phase 6 linter fix: pass userId explicitly to claimFirstAdmin().
+        || claimFirstAdmin(userId);
       allow delete: if isSelf(userId);
     }
 
