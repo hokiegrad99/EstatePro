@@ -99,7 +99,10 @@ const App = window.App = Object.assign(window.App || {}, {
           name: firebaseUser.displayName || firebaseUser.email,
           role: null,
           displayName: firebaseUser.displayName || '',
-          createdAt: null
+          createdAt: null,
+          // Phase 6: Firestore-not-ready path. No profile doc means no admin.
+          isAdmin: false,
+          isAdminClaimed: false
         };
       }
       try {
@@ -113,21 +116,32 @@ const App = window.App = Object.assign(window.App || {}, {
           name: (profile && profile.displayName) || firebaseUser.displayName || firebaseUser.email,
           role: null,
           displayName: (profile && profile.displayName) || '',
-          createdAt: (profile && profile.createdAt) || null
+          createdAt: (profile && profile.createdAt) || null,
+          // Phase 6: platform-admin flag is read from /users/{uid}.isAdmin.
+          // Strictly `=== true` mirrors isPlatformAdmin() in firestore.rules,
+          // so missing/null/false gracefully collapse to non-admin without
+          // false positives on legacy accounts.
+          isAdmin: (profile && profile.isAdmin) === true,
+          isAdminClaimed: (profile && profile.isAdminClaimed) === true
         };
-      } catch (e) {
-        console.warn('Could not hydrate user profile:', e);
-        return {
-          uid: firebaseUser.uid,
-          id: firebaseUser.uid,
-          email: firebaseUser.email,
-          name: firebaseUser.displayName || firebaseUser.email,
-          role: null,
-          displayName: firebaseUser.displayName || '',
-          createdAt: null
-        };
-      }
-    },
+    } catch (e) {
+      console.warn('Could not hydrate user profile:', e);
+      return {
+        uid: firebaseUser.uid,
+        id: firebaseUser.uid,
+        email: firebaseUser.email,
+        name: firebaseUser.displayName || firebaseUser.email,
+        role: null,
+        displayName: firebaseUser.displayName || '',
+        createdAt: null,
+        // Phase 6: profile-read failure path (e.g. transient network). No
+        // admin claim -- assume non-admin so we don't accidentally expose
+        // admin-only UI on the next render.
+        isAdmin: false,
+        isAdminClaimed: false
+      };
+    }
+  },
 
     onAuthStateChanged(cb) {
       if (typeof cb !== 'function') return;
@@ -202,16 +216,21 @@ const App = window.App = Object.assign(window.App || {}, {
       if (this._currentUser) return this._currentUser;
       var u = firebase.auth().currentUser;
       if (!u) return null;
-      return {
-        uid: u.uid,
-        id: u.uid,
-        email: u.email,
-        name: u.displayName || u.email,
-        displayName: u.displayName || '',
-        role: null,
-        createdAt: null
-      };
-    },
+    return {
+      uid: u.uid,
+      id: u.uid,
+      email: u.email,
+      name: u.displayName || u.email,
+      displayName: u.displayName || '',
+      role: null,
+      createdAt: null,
+      // Phase 6: hydrateProfile hasn't run yet (no Firebase profile doc was
+      // read). Safe default: non-admin. The right `_hydrateProfile` will
+      // overwrite this when it completes.
+      isAdmin: false,
+      isAdminClaimed: false
+    };
+  },
 
     checkSession() {
       var u = App.Auth.getCurrentUser();
@@ -559,6 +578,138 @@ const App = window.App = Object.assign(window.App || {}, {
       }
     },
 
+    // ---- Phase 6: Platform Admin namespace ----
+    // Admin powers live in /users/{uid}.isAdmin (a global flag, NOT per-estate).
+    // The firestore.rules helper isPlatformAdmin() reads this flag and is
+    // used as an OR-short-circuit across nearly every per-estate write branch,
+    // so an Admin has executor-equivalent authority on every estate they touch
+    // AND can mint new estates. The client-side helpers here cover:
+    //   - isCurrentUserAdmin(): sync read from the hydrated profile (fast);
+    //     falls back to Firestore read if not yet hydrated.
+    //   - platformAdminExists(): returns true once /_meta/platform_admin_lock
+    //     has been written. Used to decide whether to surface a "promote to
+    //     admin" affordance (you can still try, but it'll fail).
+    //   - claimAdmin(): runTransaction writes a /_meta/platform_admin_lock
+    //     doc AND sets users/{selfUid}.{isAdmin: true, isAdminClaimed: true}
+    //     atomically. The firestore.rules helper claimFirstAdmin() enforces
+    //     the same atomicity server-side via existsAfter(); a single .update()
+    //     without runTransaction is rejected at the server. This closes the
+    //     race condition where two clients might otherwise both self-promote.
+    //   - createNewEstate(): any signed-in Admin can mint a brand-new estate
+    //     doc, becoming its sole executor. Bypasses the __founderSecret
+    //     check (their Admin status is the credential).
+    Admin: {
+      async isCurrentUserAdmin() {
+        var u = App.Auth.getCurrentUser();
+        if (!u) return false;
+        if (u.isAdmin === true) return true;
+        // Fall back to a live read if _hydrateProfile hasn't finished yet
+        // OR if the cached value is stale (e.g. a different tab just claimed
+        // Admin). Cheap: one doc read with cache.
+        if (!App.Firebase || !App.Firebase.db) return false;
+        try {
+          var snap = await App.Firebase.db.collection('users').doc(u.uid).get();
+          return snap.exists && snap.data() && snap.data().isAdmin === true;
+        } catch (e) {
+          console.warn('[EstatePro] isCurrentUserAdmin live-read failed:', e && e.message);
+          return false;
+        }
+      },
+
+      async platformAdminExists() {
+        if (!App.Firebase || !App.Firebase.db) return false;
+        try {
+          var snap = await App.Firebase.db.doc('_meta/platform_admin_lock').get();
+          return !!snap.exists;
+        } catch (e) {
+          console.warn('[EstatePro] platformAdminExists failed:', e && e.message);
+          return false;
+        }
+      },
+
+      async claimAdmin() {
+        var u = App.Auth.getCurrentUser();
+        if (!u) return { success: false, message: 'Not signed in.' };
+        if (!App.Firebase || !App.Firebase.db) return { success: false, message: 'Firestore not ready.' };
+        // Refuse early if we already know an Admin exists, so the user gets
+        // an actionable message instead of a transaction error.
+        if (await this.platformAdminExists()) {
+          return {
+            success: false,
+            message: 'A platform Admin already exists for this project. Ask the existing Admin to grant you access (they can update users/{yourUid}.isAdmin from any client).'
+          };
+        }
+        try {
+          await App.Firebase.db.runTransaction(async function (tx) {
+            var lockRef = App.Firebase.db.doc('_meta/platform_admin_lock');
+            var userRef = App.Firebase.db.collection('users').doc(u.uid);
+            // Precondition: BOTH writes must complete. If anyone else has
+            // claimed since the pre-flight read above (e.g. another tab
+            // racing the same call), the lockRef.get() returns exists:true
+            // and the throw rolls back our user write too.
+            var lockSnap = await tx.get(lockRef);
+            if (lockSnap.exists) {
+              throw new Error('A platform Admin already exists.');
+            }
+            tx.set(lockRef, {
+              uid: u.uid,
+              email: (u.email || ''),
+              claimedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            tx.update(userRef, {
+              isAdmin: true,
+              isAdminClaimed: true,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+          });
+          // Refresh the in-memory profile so the same-tab sidebar update
+          // sees isAdmin=true without waiting for the next page reload.
+          if (App.Auth._currentUser) {
+            App.Auth._currentUser.isAdmin = true;
+            App.Auth._currentUser.isAdminClaimed = true;
+          }
+          return { success: true, message: 'You are now a platform Admin. Reloading...' };
+        } catch (err) {
+          return { success: false, message: 'Could not claim Admin: ' + (err && err.message ? err.message : String(err)) };
+        }
+      },
+
+      async createNewEstate(opts) {
+        var u = App.Auth.getCurrentUser();
+        if (!u) return { success: false, message: 'Not signed in.' };
+        if (!App.Firebase || !App.Firebase.db) return { success: false, message: 'Firestore not ready.' };
+        if (!opts || !opts.decedent || !String(opts.decedent).trim()) {
+          return { success: false, message: 'Decedent name is required.' };
+        }
+        try {
+          // Firestore auto-id lets us write without a manual id allocator.
+          var newRef = App.Firebase.db.collection('estates').doc();
+          var payload = {
+            memberIds: [u.uid],
+            roles: {},
+            pendingInvites: {},
+            createdBy: u.uid,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            decedent: {
+              fullName: String(opts.decedent).trim(),
+              dateOfDeath: opts.dateOfDeath || ''
+            },
+            executor: {
+              name: (opts.executorName && String(opts.executorName).trim()) || u.name || u.email || 'Executor',
+              relationship: 'Executor'
+            },
+            tasks: [], assets: [], debts: [], cashflow: [], heirs: [], distributions: []
+          };
+          payload.roles[u.uid] = 'executor';
+          await newRef.set(payload);
+          return { success: true, message: 'Estate created.', estateId: newRef.id };
+        } catch (err) {
+          return { success: false, message: 'Could not create estate: ' + (err && err.message ? err.message : String(err)) };
+        }
+      }
+    },
+
     // (InviteUrl was a sibling function declaration next to the Invite
     // object literal -- which is a syntax error inside Object.assign's body.
     // The URL build is now inlined at the two call sites that need it:
@@ -576,7 +727,9 @@ const App = window.App = Object.assign(window.App || {}, {
     async updateUserRole() { return { success: false, message: 'Per-user roles are not used in Phase 1. Use estate memberships in Phase 4.' }; },
     async deleteUser() { return { success: false, message: 'Not available in Phase 1.' }; },
     async resetUserPassword() { return { success: false, message: 'Use the Firebase Auth "reset password" flow instead.' }; },
-    async promoteSelfToAdmin() { return { success: false, message: 'Per-estate roles are managed via invites in Phase 4.' }; },
+    // Phase 6: legacy phase-1 stub now delegates to the Phase-6 Admin
+    // namespace. user-menu dropdown callers still hit this method by name.
+    async promoteSelfToAdmin() { return App.Auth.Admin.claimAdmin(); },
     async changeOwnPassword() { return { success: false, message: 'Use the Firebase Auth change-password flow (Profile menu).' }; },
 
     _formatAuthError(err) {
@@ -620,7 +773,11 @@ const App = window.App = Object.assign(window.App || {}, {
         const roles = (estate && estate.roles) || {};
         if (roles[user.uid] === 'executor') return true;
       } catch (e) { /* fall through silently -- never crash the gate */ }
-      return user.role === 'Admin' || user.role === 'Executor';
+      // Phase 6: Platform Admin authority is global, not per-estate. An Admin
+      // can edit / invite / clear data regardless of which estate they're in
+      // OR even if they're in NONE of the user's known estates. Per-estate
+      // editing is unlocked as soon as the user has /users/{uid}.isAdmin=true.
+      return user.isAdmin === true || user.role === 'Admin' || user.role === 'Executor';
     },
 
     canManageUsers() {
@@ -636,7 +793,8 @@ const App = window.App = Object.assign(window.App || {}, {
         const roles = (estate && estate.roles) || {};
         if (roles[user.uid] === 'executor') return true;
       } catch (e) { /* fall through */ }
-      return user.role === 'Admin';
+      // Phase 6: same global-Admin override as canEdit.
+      return user.isAdmin === true || user.role === 'Admin';
     },
 
     canView() {
@@ -1615,6 +1773,12 @@ const App = window.App = Object.assign(window.App || {}, {
       // selector slot, and hidden when the user has only one estate.
       this.initEstateSelector();
 
+      // Phase 6: side-mount the "+ New Estate" PLATFORM block in the
+      // sidebar if the current user is a platform Admin. Re-entrant: any
+      // prior injection is removed first so this is safe to call again after
+      // a successful Admin claim (pushed by the user-menu click handler).
+      this.renderPlatformSidebar();
+
       // Notify ready callbacks
       App._setReady();
     },
@@ -1631,6 +1795,174 @@ const App = window.App = Object.assign(window.App || {}, {
           el.disabled = true;
         });
       }
+    },
+
+    // ---- Phase 6: Platform sidebar injection ----
+    // Mounts a "PLATFORM" header + a "+ New Estate" action at the very top
+    // of the sidebar-nav, only for users with isAdmin=true. Idempotent: any
+    // prior injection is removed first. Safe to call on init AND after a
+    // successful Admin claim from the user-menu dropdown. No-op on the login
+    // page (which has no sidebar) and on pages without a sidebar-nav.
+    renderPlatformSidebar() {
+      var nav = document.querySelector('.sidebar-nav');
+      if (!nav) return;
+      var oldHeader = nav.querySelector('.sidebar-platform-header');
+      if (oldHeader) oldHeader.remove();
+      var oldItem = nav.querySelector('.sidebar-platform-item');
+      if (oldItem) oldItem.remove();
+
+      var user = App.Auth.getCurrentUser();
+      if (!user || user.isAdmin !== true) return;
+
+      // "PLATFORM" header with a divider above + below. Visually distinct
+      // from the estate nav so users see it as a separate scope (it's at
+      // the project level, not the estate level).
+      var header = document.createElement('div');
+      header.className = 'sidebar-platform-header';
+      header.setAttribute('data-platform-sidebar', '1');
+      header.style.cssText = 'padding:0.75rem 1rem 0.35rem; font-size:0.65rem; color:var(--sidebar-text,#94a3b8); opacity:0.55; text-transform:uppercase; letter-spacing:0.1em; border-top:1px solid rgba(255,255,255,0.08); margin-top:0.5rem; pointer-events:none;';
+      header.textContent = 'Platform';
+      nav.insertBefore(header, nav.firstChild);
+
+      var ul = nav.querySelector('ul');
+      if (!ul) return;
+      var item = document.createElement('li');
+      item.className = 'sidebar-platform-item';
+      item.setAttribute('data-platform-sidebar', '1');
+      item.innerHTML = '<a href="#" class="sidebar-platform-btn" data-action="new-estate" style="color:#fff; background:rgba(37,99,235,0.18); border-left:3px solid #2563eb; font-weight:600;">'
+        + '<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>'
+        + 'New Estate</a>';
+      ul.insertBefore(item, ul.firstChild);
+
+      var btn = item.querySelector('a');
+      if (btn) btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        App.UI.showCreateEstateModal();
+      });
+    },
+
+    // ---- Phase 6: Create-estate modal ----
+    // Invoked by the sidebar "+ New Estate" button. Captures dept: decedent
+    // name (required) + date of death + executor name + executors handle
+    // the auto-id creation via Admin.createNewEstate. On success we
+    // (a) persist the new id to localStorage, (b) bind App.Data to it via
+    // reload, (c) navigate to dashboard.html?welcome=1 so the new estate's
+    // birth announcement banner can be shown on first visit.
+    renderCreateEstateModal() {
+      if (document.getElementById('createEstateModal')) return;
+      var modal = document.createElement('div');
+      modal.id = 'createEstateModal';
+      modal.className = 'modal-overlay';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'createEstateTitle');
+      modal.innerHTML =
+        '<div class="modal" style="max-width:520px;">'
+        + '  <div class="modal-header">'
+        + '    <div class="modal-title" id="createEstateTitle">Create a new estate</div>'
+        + '    <button type="button" class="modal-close" onclick="App.UI.closeModal(\'createEstateModal\')" aria-label="Close">&times;</button>'
+        + '  </div>'
+        + '  <form id="createEstateForm">'
+        + '    <div class="modal-body">'
+        + '      <p style="margin-bottom:1rem; color:var(--text-secondary); font-size:0.9rem;">As a platform Admin you can mint a new estate. You will become its sole executor; use the Invite flow on the Executor page to add heirs after creation.</p>'
+        + '      <div class="form-group">'
+        + '        <label class="form-label" for="ceDecedent">Decedent\'s full name <span aria-label="required">*</span></label>'
+        + '        <input type="text" id="ceDecedent" class="form-input" placeholder="e.g. Jane Doe" required autocomplete="off">'
+        + '      </div>'
+        + '      <div class="form-row">'
+        + '        <div class="form-group">'
+        + '          <label class="form-label" for="ceDateOfDeath">Date of Death</label>'
+        + '          <input type="date" id="ceDateOfDeath" class="form-input">'
+        + '        </div>'
+        + '        <div class="form-group">'
+        + '          <label class="form-label" for="ceExecutorName">Your name (Executor)</label>'
+        + '          <input type="text" id="ceExecutorName" class="form-input" placeholder="Defaults to your account name">'
+        + '        </div>'
+        + '      </div>'
+        + '      <div id="ceMessage" style="margin-top:0.5rem;"></div>'
+        + '    </div>'
+        + '    <div class="modal-footer">'
+        + '      <button type="button" class="btn btn-secondary" onclick="App.UI.closeModal(\'createEstateModal\')">Cancel</button>'
+        + '      <button type="submit" class="btn btn-primary">Create Estate</button>'
+        + '    </div>'
+        + '  </form>'
+        + '</div>';
+      document.body.appendChild(modal);
+
+      var form = document.getElementById('createEstateForm');
+      var self = this;
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var msgEl = document.getElementById('ceMessage');
+        var submitBtn = form.querySelector('button[type="submit"]');
+        msgEl.innerHTML = '';
+        submitBtn.disabled = true;
+        var originalLabel = submitBtn.textContent;
+        submitBtn.textContent = 'Creating...';
+        try {
+          var decedent = document.getElementById('ceDecedent').value.trim();
+          var dod = document.getElementById('ceDateOfDeath').value || '';
+          var execName = document.getElementById('ceExecutorName').value.trim();
+          if (!decedent) {
+            msgEl.innerHTML = '<div class="alert alert-danger">Decedent name is required.</div>';
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalLabel;
+            return;
+          }
+          var result = await App.Auth.Admin.createNewEstate({
+            decedent: decedent,
+            dateOfDeath: dod,
+            executorName: execName
+          });
+          if (result && result.success) {
+            msgEl.innerHTML = '<div class="alert alert-success">' + App.UI.escapeHtml(result.message) + ' Switching to the new estate...</div>';
+            try { localStorage.setItem('estatepro_active_estate', result.estateId); } catch (e2) {}
+            setTimeout(function () {
+              // Page reload so every render starts fresh against the new doc.
+              // dashboard.html?welcome=1 is a no-op today but gives us a hook
+              // for a future "estate just created" banner without forcing a
+              // back-end change.
+              window.location.href = 'dashboard.html?welcome=1&new=1';
+            }, 700);
+          } else {
+            msgEl.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(result && result.message ? result.message : 'Could not create estate.') + '</div>';
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalLabel;
+          }
+        } catch (err) {
+          msgEl.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(err && err.message ? err.message : String(err)) + '</div>';
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalLabel;
+        }
+      });
+    },
+
+    showCreateEstateModal() {
+      // Defensive gate: only Admins can open this modal.
+      var user = App.Auth.getCurrentUser();
+      if (!user || user.isAdmin !== true) {
+        alert('Only platform Admins can create new estates.');
+        return;
+      }
+      this.renderCreateEstateModal();
+      // Pre-fill the executor-name field with the signed-in user's name.
+      var execField = document.getElementById('ceExecutorName');
+      if (execField && !execField.value && user.name) {
+        execField.value = user.name;
+      }
+      // Reset any prior state on every open.
+      var decField = document.getElementById('ceDecedent');
+      if (decField) decField.value = '';
+      var dodField = document.getElementById('ceDateOfDeath');
+      if (dodField) dodField.value = '';
+      var msgEl = document.getElementById('ceMessage');
+      if (msgEl) msgEl.innerHTML = '';
+      var submitBtn = document.querySelector('#createEstateForm button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Estate';
+      }
+      this.openModal('createEstateModal');
     },
 
     showAlert(container, message, type = 'danger') {
@@ -2017,13 +2349,16 @@ const App = window.App = Object.assign(window.App || {}, {
         if (roleEl) roleEl.textContent = App.Permissions.getRoleLabel(currentUser.role);
       }
 
+      // Phase 6: the user-menu "Promote to Admin" button shows whenever the
+      // current user is NOT yet a platform admin. The actual race against
+      // a pre-existing admin is closed server-side by the claimFirstAdmin
+      // helper in firestore.rules (existsAfter() locks the platform_admin_lock
+      // atomically with the user-write). The client pre-flight
+      // platformAdminExists() check in the click handler gives a friendlier
+      // error message when the user is just too late.
       const promoteBtn = dropdown.querySelector('#userMenuPromoteAdmin');
-      if (promoteBtn && currentUser && currentUser.role === 'Executor') {
-        const users = App.Auth.getUsers();
-        const hasAdmin = users.some(u => u.role === 'Admin');
-        if (!hasAdmin) {
-          promoteBtn.style.display = 'block';
-        }
+      if (promoteBtn && currentUser && currentUser.isAdmin !== true) {
+        promoteBtn.style.display = 'block';
       }
 
       const clearDataBtn = dropdown.querySelector('#userMenuClearData');
@@ -2065,13 +2400,37 @@ const App = window.App = Object.assign(window.App || {}, {
           e.stopPropagation();
           dropdown.style.display = 'none';
           userInfo.setAttribute('aria-expanded', 'false');
-          if (!confirm('Promote your account to Admin? This will give you full access to user management and all settings.')) return;
-          const result = await App.Auth.promoteSelfToAdmin();
-          if (result.success) {
-            alert(result.message + ' The page will refresh to apply changes.');
-            window.location.reload();
-          } else {
+          if (!confirm('Promote your account to Platform Admin?\n\nThis gives you:\n  - the ability to create additional estates in this same Firebase project\n  - global estate-management authority on every estate\n\nThere will only ever be one Platform Admin per Firebase project. Once claimed, the door is permanently closed.')) return;
+          // Show a "Working..." indicator inline so users see the runTransaction
+          // is in flight instead of wondering if the click registered.
+          var selfUI = App.UI;
+          promoteBtn.disabled = true;
+          var originalLabel = promoteBtn.innerHTML;
+          promoteBtn.innerHTML = '<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:0.5rem; animation:spin 1.2s linear infinite;"><circle cx="12" cy="12" r="10" opacity="0.25"></circle><path d="M12 2a10 10 0 019.95 9" fill="none"></path></svg>Working...';
+          var result;
+          try {
+            result = await App.Auth.Admin.claimAdmin();
+          } catch (err) {
+            result = { success: false, message: err && err.message ? err.message : String(err) };
+          }
+          promoteBtn.disabled = false;
+          promoteBtn.innerHTML = originalLabel;
+          if (result && result.success) {
             alert(result.message);
+            // Re-mount the sidebar so the "+ New Estate" PLATFORM item shows.
+            selfUI.renderPlatformSidebar();
+            // Re-render the dropdown so the "Promote to Admin" button hides.
+            // Cheap reset: bump a sentinel attribute and rebuild the menu.
+            // The existing dropdown node is still in DOM with the old state;
+            // simplest is to remove + re-init.
+            var dropdownNode = dropdown.parentNode.querySelector('.user-menu-dropdown');
+            var currentUserForRenew = App.Auth.getCurrentUser();
+            dropdownNode.remove();
+            // Need fresh refs after DOM removal; just call init again on this
+            // .user-info element.
+            selfUI.initUserMenu();
+          } else {
+            alert((result && result.message) || 'Could not claim Admin.');
           }
         });
       }

@@ -41,6 +41,33 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/_meta/bootstrap_lock);
     }
 
+    // ---- Phase 6: Platform Admin role ----
+    // A user holds Admin powers when their /users/{uid}.isAdmin == true.
+    // This is a GLOBAL flag (not per-estate). Admin can write any per-estate
+    // the way an executor can, AND can mint additional estates (bypassing the
+    // bootstrap_lock AND the __founderSecret check).
+    function isPlatformAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    // First-claim one-shot. A signed-in user can self-write
+    // {isAdmin:true, isAdminClaimed:true} ONLY when no platform_admin_lock
+    // exists yet, AND the transaction writes the lock atomically. existsAfter()
+    // forces that atomicity -- a malicious client issuing a single .update()
+    // without runTransaction is rejected because the rule-engine can't observe
+    // the lock being written in the same request. After the lock exists, this
+    // branch is dead and an attacker can never mint themselves an Admin.
+    function claimFirstAdmin() {
+      return isSignedIn()
+        && request.auth.uid == userId
+        && !exists(/databases/$(database)/documents/_meta/platform_admin_lock)
+        && request.resource.data.get('isAdmin', false) == true
+        && request.resource.data.get('isAdminClaimed', false) == true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAdmin', 'isAdminClaimed', 'updatedAt'])
+        && existsAfter(/databases/$(database)/documents/_meta/platform_admin_lock);
+    }
+
     // ---- Phase 3 hardening: per-field shape validation ----
     // The Phase 2 executor-write rule froze memberIds/roles/pendingInvites/
     // __founderSecret/createdBy/createdAt but did NOT validate that the four
@@ -128,8 +155,12 @@ service cloud.firestore {
     function isModifyMemberRole(estateId) {
       let rolesDiff = request.resource.data.roles.diff(resource.data.roles);
       return isSignedIn()
-        && isMember(estateId)
-        && resource.data.roles[request.auth.uid] == 'executor'
+        // Phase 6: Admin powers are global -- an Admin can run this branch
+        // on any estate whether they're a member or not. The last-executor
+        // guard below still applies even to Admins (you can't orphan an
+        // estate even with Admin authority).
+        && (isPlatformAdmin() || isMember(estateId))
+        && (isPlatformAdmin() || resource.data.roles[request.auth.uid] == 'executor')
         // Exactly one role key's value changed; no adds, no removes.
         // We use addedKeys()/removedKeys()/changedKeys()/.size() instead of
         // indexing `affectedKeys()[0]` because Firestore's CEL engine returns
@@ -159,8 +190,10 @@ service cloud.firestore {
     function isRemoveMember(estateId) {
       let rolesDiff = request.resource.data.roles.diff(resource.data.roles);
       return isSignedIn()
-        && isMember(estateId)
-        && resource.data.roles[request.auth.uid] == 'executor'
+        // Phase 6: Admins can remove members from any estate. Last-executor
+        // guard below remains in effect even for Admins.
+        && (isPlatformAdmin() || isMember(estateId))
+        && (isPlatformAdmin() || resource.data.roles[request.auth.uid] == 'executor')
         // Exactly one member removed from BOTH memberIds and roles keys.
         && request.resource.data.memberIds.size() == resource.data.memberIds.size() - 1
         && request.resource.data.roles.size()     == resource.data.roles.size()     - 1
@@ -193,12 +226,23 @@ service cloud.firestore {
     // ---- users/{userId} ----
     // Each user can read and write only their own profile doc.
     match /users/{userId} {
-      allow read, write: if isSelf(userId);
-
-      // Initial profile create must include email; further writes are ruled as
-      // above (any field changes by self).
+      // Admins can read every user's profile (for platform-management UI),
+      // and update every user profile (typo fixes, demoting another admin,
+      // promoting another admin onto the platform, etc.). The promotion
+      // case bypasses claimFirstAdmin: an existing admin writing isAdmin=true
+      // to another user is allowed by the isPlatformAdmin() branch.
+      allow read: if isSelf(userId) || isPlatformAdmin();
       allow create: if isSelf(userId)
         && request.resource.data.email is string;
+      allow update: if isSelf(userId)
+        || isPlatformAdmin()
+        // Phase 6 NEW OR-branch: first-ever self-claim to Admin.
+        // Atomicity is enforced at the server: rule demands that the
+        // transaction also write /_meta/platform_admin_lock (existsAfter);
+        // the lock is the locking primitive that closes the race condition
+        // for first-claim because it's !exists on entry and one-create-only.
+        || claimFirstAdmin();
+      allow delete: if isSelf(userId);
     }
 
     // ---- _meta/{metaId} ----
@@ -213,28 +257,26 @@ service cloud.firestore {
     // estate. update/delete are forbidden here so the lock is genuinely one-shot:
     // even after Phase 4 brings admin-tooling, retiring a project will go
     // through a Cloud Function or admin-only manual step, not the client.
-    match /_meta/{metaId} {
+    // Two distinct /_meta docs, each one-shot:
+    //   bootstrap_lock -- immutably frozen (founder-bootstrap gate, original
+    //     behavior, one-shot forever).
+    //   platform_admin_lock -- created atomically by the first admin self-
+    //     claim (existsAfter check on /users/{uid}.update), and editable by
+    //     an existing Admin (so we can rotate the platform-admin identity
+    //     later if needed). Until written, anyone signed in may attempt a
+    //     runTransaction to install the first admin; after it exists, the
+    //     runTransaction fails and claimFirstAdmin's branch is dead.
+    match /_meta/bootstrap_lock {
       allow read: if isSignedIn();
-      // Create is allowed only for the very first time the doc is written.
-      // After that, the server rejects further creates of the same doc-id,
-      // and any attempt to write a different doc-id under /_meta is also
-      // blocked because the precondition fails (the doc would not yet exist
-      // — wait, that's actually allowed since !exists is true). So we
-      // additionally scope creates to the well-known doc-id bootstrap_lock
-      // by requiring the caller to know the name. (Firestore rules can't
-      // enumerate doc ids, so this is enforced by the bootstrap.html client
-      // writing only '_meta/bootstrap_lock'.)
-      // Create is allowed ONLY for the well-known _meta/bootstrap_lock doc-id.
-      // Without this scope check, any signed-in user could spam-create arbitrary
-      // _meta/* docs (each one consumes a read on every bootstrap check forever,
-      // and our `update, delete: false` ruleset means nobody can ever clean
-      // them up client-side). Restricting the doc-id to a known constant keeps
-      // the collection clean.
       allow create: if isSignedIn()
-        && metaId == 'bootstrap_lock'
-        && !exists(/databases/$(database)/documents/_meta/$(metaId));
-      // Single-shot: the lock can never be moved or deleted client-side.
+        && !exists(/databases/$(database)/documents/_meta/bootstrap_lock);
       allow update, delete: if false;
+    }
+    match /_meta/platform_admin_lock {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && !exists(/databases/$(database)/documents/_meta/platform_admin_lock);
+      allow update, delete: if isPlatformAdmin();
     }
 
     // ---- estates/{estateId} ----
@@ -284,17 +326,41 @@ service cloud.firestore {
       // The constant below is the SHA-256 hex of YOUR secret. See FIREBASE-SETUP.md.
       // Do NOT use the placeholder below — replace it before deploying.
       allow create: if isSignedIn()
-        && !isBootstrapLocked()
-        && '__founderSecret' in request.resource.data
-        && request.resource.data.__founderSecret is string
-        && request.resource.data.__founderSecret.size() == 64
-        && request.resource.data.__founderSecret
+        && (
+          // Phase 1: founder-bootstrap path. Only the FIRST founder estate,
+          // gated by !isBootstrapLocked() AND the __founderSecret hash below.
+          (!isBootstrapLocked()
+            && '__founderSecret' in request.resource.data
+            && request.resource.data.__founderSecret is string
+            && request.resource.data.__founderSecret.size() == 64
+            && request.resource.data.__founderSecret
               == '4473143dc63f754c10f105c8cda97d119c3bb95cce7b50ae0cebc7cb00594175'
-        && request.resource.data.memberIds.size() == 1
-        && request.resource.data.memberIds[0] == request.auth.uid
-        && request.resource.data.roles[request.auth.uid] == 'executor'
-        && request.resource.data.pendingInvites.size() == 0
-        && isValidEstateShape(request.resource.data);
+            && request.resource.data.memberIds.size() == 1
+            && request.resource.data.memberIds[0] == request.auth.uid
+            && request.resource.data.roles[request.auth.uid] == 'executor'
+            && request.resource.data.pendingInvites.size() == 0
+            && isValidEstateShape(request.resource.data))
+          // Phase 6 NEW OR-branch: any existing platform Admin may mint a
+          // new estate. They skip the bootstrap-secret (their Admin status
+          // is the credential) but still must be the sole executor and the
+          // shape validator must pass. Each Admin-created estate gets its
+          // own Firestore auto-id; nothing in this branch reads or inherits
+          // __founderSecret from the founder-bootstrap estate.
+          || (isPlatformAdmin()
+            // Phase 6 advisory fix: explicitly REJECT the founder-bootstrap
+            // secret on the admin path. Without this, an admin who knows the
+            // founder-secret hash could accidentally stash it in a new estate
+            // doc, which would then leak the secret value to any member of
+            // that new estate via the standard read rule. Admins minting an
+            // estate never need __founderSecret -- their Admin status is the
+            // credential. We forbid the field entirely on this branch.
+            && !('__founderSecret' in request.resource.data)
+            && request.resource.data.memberIds.size() == 1
+            && request.resource.data.memberIds[0] == request.auth.uid
+            && request.resource.data.roles[request.auth.uid] == 'executor'
+            && request.resource.data.pendingInvites.size() == 0
+            && isValidEstateShape(request.resource.data))
+        );
 
       // Phase 2: executor writes allowed; structural/auth fields frozen.
       //
@@ -309,7 +375,38 @@ service cloud.firestore {
       // we'll add a separate rule path for that. Until then, this rule is the
       // only path that lets the bootstrap user edit estate data, keeping the
       // structural shape stable across Phase 2 writes.
-      allow update: if (isMember(estateId)
+      // Phase 6: Admin branch is NOT a top-level short-circuit. Earlier draft
+      // wrote `if isPlatformAdmin() || (...)` -- that bypassed every frozen-
+      // field clause (last-executor guard via isModifyMemberRole, shape
+      // validator) because the OR chain short-circuited as soon as the admin
+      // check passed. The corrected shape below treats Admin as its own
+      // self-contained check that enforces the SAME frozen-fields chain as
+      // the executor-write branch. Admins have GLOBAL authority (no
+      // isMember / role==executor required) but not UNCHECKED authority:
+      //   - they must satisfy isValidEstateShape (tasks/assets/debts stay
+      //     arrays, decedent/executor stay maps, memberIds/roles/
+      //     pendingInvites stay lists/maps of bounded size);
+      //   - they cannot mutate memberIds, roles, pendingInvites,
+      //     __founderSecret, createdBy, or createdAt;
+      //   - the last-executor guard inside isModifyMemberRole / isRemoveMember
+      //     is unchanged and STILL FIRES for admins (you cannot orphan an
+      //     estate even with platform Admin authority).
+      // The Phase 4 consume-invite branch is intentionally left without a
+      // separate admin prefix: admin can't impersonate invitees for
+      // consumption because their auth.email won't match the invitee's
+      // email -- the consume rule relies on email matching, not on the
+      // role check.
+      allow update: if (isPlatformAdmin()
+        && request.resource.data.memberIds      == resource.data.memberIds
+        && request.resource.data.roles          == resource.data.roles
+        && request.resource.data.pendingInvites == resource.data.pendingInvites
+        && (!('__founderSecret' in request.resource.data)
+            || request.resource.data.__founderSecret == resource.data.__founderSecret)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && isValidEstateShape(request.resource.data))
+        // Phase 2 executor-write branch (legacy, unchanged).
+        || (isMember(estateId)
         && resource.data.roles[request.auth.uid] == 'executor'
         // The Phase 2 frozen-fields chain: the executor-writing path can
         // edit tasks/assets/debts/cashflow/heirs/decedent/executor BUT NOT
@@ -383,8 +480,8 @@ service cloud.firestore {
         // Create: executor of the parent estate only. Shape enforced via
         // required keys + type checks. FieldValue.serverTimestamp() is used
         // for createdAt by the client.
-        allow create: if isMember(estateId)
-          && get(/databases/$(database)/documents/estates/$(estateId)).data.roles[request.auth.uid] == 'executor'
+        allow create: if (isPlatformAdmin() || isMember(estateId))
+          && (isPlatformAdmin() || get(/databases/$(database)/documents/estates/$(estateId)).data.roles[request.auth.uid] == 'executor')
           && request.resource.data.keys().hasAll(['inviteeEmail', 'role', 'createdBy', 'createdAt'])
           && request.resource.data.inviteeEmail is string
           && (request.resource.data.role in ['executor', 'heir', 'beneficiary'])
@@ -400,8 +497,8 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['redeemedBy', 'redeemedAt']);
         // Delete: executor of the parent estate, and only an UNREDEEMED
         // invite (so revocation can't yank an already-claimed seat).
-        allow delete: if isMember(estateId)
-          && get(/databases/$(database)/documents/estates/$(estateId)).data.roles[request.auth.uid] == 'executor'
+        allow delete: if (isPlatformAdmin() || isMember(estateId))
+          && (isPlatformAdmin() || get(/databases/$(database)/documents/estates/$(estateId)).data.roles[request.auth.uid] == 'executor')
           && resource.data.redeemedBy == null;
       }
     }
