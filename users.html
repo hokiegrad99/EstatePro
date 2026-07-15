@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EstatePro - User Management</title>
+  <title>EstatePro - Platform Admin</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -24,7 +24,7 @@
         <li><a href="cashflow.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg> Cashflow</a></li>
         <li><a href="heirs.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Heirs</a></li>
         <li><a href="distributions.html"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg> Distributions</a></li>
-        <li><a href="users.html" class="active"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</a></li>
+        <li><a href="users.html" class="active"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Platform Admin</a></li>
       </ul>
     </nav>
     <div class="sidebar-footer">
@@ -39,7 +39,7 @@
     <header class="header">
       <div class="header-left">
         <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle navigation menu" aria-expanded="false"><svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
-        <span class="page-title">User Management</span>
+        <span class="page-title">Platform Admin</span>
       </div>
       <div class="header-right">
         <button class="btn-icon" id="darkModeToggle" title="Toggle Dark Mode" aria-label="Toggle Dark Mode"></button>
@@ -58,16 +58,41 @@
         <div class="card-body" style="text-align:center; padding:2rem;">
           <div style="font-size:3rem; margin-bottom:1rem;">&#128274;</div>
           <h2>Access Denied</h2>
-          <p style="color:var(--text-secondary);">You must be an Administrator to manage user accounts.</p>
+          <p style="color:var(--text-secondary);">You must be a Platform Admin to manage user accounts.</p>
           <a href="dashboard.html" class="btn btn-primary" style="margin-top:1rem;">Go to Dashboard</a>
         </div>
       </div>
 
       <!-- Users Panel -->
       <div id="usersPanel">
+        <!-- Banner explaining the page's post-Phase-4 role.
+             Sits at the top of the panel; subtitle + 4 bullets
+             + a pointer to executor.html for per-estate concerns. -->
+        <div class="card" style="background:rgba(37,99,235,0.05); border:1px solid rgba(37,99,235,0.18); margin-bottom:1.5rem;">
+          <div class="card-body" style="padding:1rem 1.25rem;">
+            <div style="display:flex; gap:0.75rem; align-items:flex-start;">
+              <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#2563eb; flex-shrink:0; margin-top:0.15rem;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              <div>
+                <h3 style="margin:0 0 0.4rem; font-size:1rem; color:#1e40af;">Platform Admin</h3>
+                <p style="margin:0; font-size:0.9rem; color:var(--text-secondary); line-height:1.55;">
+                  Platform-level concerns that aren't part of any single estate live here.
+                </p>
+                <ul style="margin:0.5rem 0 0; padding-left:1.25rem; font-size:0.85rem; color:var(--text-secondary); line-height:1.55;">
+                  <li><strong>Register a User</strong> &mdash; create a Firebase Auth account so someone can sign in even without an invite.</li>
+                  <li><strong>Reset Password</strong> &mdash; reset another user's Firebase Auth password.</li>
+                  <li><strong>Delete User</strong> &mdash; remove a user's account from the platform entirely.</li>
+                  <li><strong>Export Accounts CSV</strong> &mdash; audit-friendly listing of everyone with platform access.</li>
+                </ul>
+                <p style="margin:0.7rem 0 0; font-size:0.8rem; color:var(--text-secondary);">
+                  Per-estate membership (roles, invitations, member removal) lives on <a href="executor.html" style="color:var(--primary-color);">Executor</a>. The role dropdowns that used to be on this page were confusing post-Phase&nbsp;4 &mdash; the per-estate model owns those.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="card">
           <div class="card-header">
-            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Users</div>
+            <div class="card-title"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg> Registered Accounts</div>
             <div class="btn-group">
               <button class="btn btn-secondary btn-sm" id="exportUsersBtn">
                 <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -83,7 +108,6 @@
                     <th>Name</th>
                     <th>Username</th>
                     <th>Email</th>
-                    <th>Role</th>
                     <th style="text-align:right">Actions</th>
                   </tr>
                 </thead>
@@ -110,22 +134,8 @@
                   <input type="email" id="addUserEmail" class="form-input" placeholder="Enter email" required autocomplete="email">
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="addUserUsername">Username</label>
-                  <input type="text" id="addUserUsername" class="form-input" placeholder="Choose username" required autocomplete="username">
-                </div>
-                <div class="form-group">
                   <label class="form-label" for="addUserPassword">Password</label>
                   <input type="password" id="addUserPassword" class="form-input" placeholder="Set password" required autocomplete="new-password">
-                </div>
-                <div class="form-group">
-                  <label class="form-label" for="addUserRole">Role</label>
-                  <select id="addUserRole" class="form-select" required>
-                    <option value="">Select role...</option>
-                    <option value="Admin">Admin</option>
-                    <option value="Executor">Executor</option>
-                    <option value="Heir">Heir</option>
-                    <option value="Beneficiary">Beneficiary</option>
-                  </select>
                 </div>
               </div>
               <div id="addUserMessage" style="margin-bottom:1rem;"></div>
@@ -198,20 +208,10 @@
         const tbody = document.querySelector('#usersTable tbody');
         tbody.innerHTML = users.map(u => {
           const isSelf = currentUser && currentUser.id === u.id;
-          const isAdmin = u.role === 'Admin';
-          const roleBadge = u.role === 'Admin' ? 'badge-danger' : u.role === 'Executor' ? 'badge-info' : 'badge-default';
-          return `<tr>
+return `<tr>
             <td>${App.UI.escapeHtml(u.name)}</td>
             <td>${App.UI.escapeHtml(u.username)}${isSelf ? ' <span class="badge badge-default">You</span>' : ''}</td>
             <td>${App.UI.escapeHtml(u.email)}</td>
-            <td>
-              <select class="form-select user-role-select" data-user-id="${u.id}" ${isSelf ? 'disabled' : ''}>
-                <option value="Admin" ${u.role === 'Admin' ? 'selected' : ''}>Admin</option>
-                <option value="Executor" ${u.role === 'Executor' ? 'selected' : ''}>Executor</option>
-                <option value="Heir" ${u.role === 'Heir' ? 'selected' : ''}>Heir</option>
-                <option value="Beneficiary" ${u.role === 'Beneficiary' ? 'selected' : ''}>Beneficiary</option>
-              </select>
-            </td>
             <td style="text-align:right;">
               <div class="btn-group" style="justify-content:flex-end;">
                 <button class="btn btn-sm btn-secondary" onclick="openResetPassword(${u.id}, '${App.UI.escapeHtml(u.name)}')" title="Reset Password">
@@ -225,21 +225,6 @@
           </tr>`;
         }).join('');
 
-        // Attach role change handlers
-        tbody.querySelectorAll('.user-role-select').forEach(select => {
-          select.addEventListener('change', async (e) => {
-            const userId = parseInt(e.target.dataset.userId, 10);
-            const newRole = e.target.value;
-            const result = await App.Auth.updateUserRole(userId, newRole);
-            if (result.success) {
-              showMessage('addUserMessage', 'Role updated successfully.', 'success');
-              renderUsers();
-            } else {
-              showMessage('addUserMessage', result.message, 'danger');
-              renderUsers();
-            }
-          });
-        });
       }
 
       window.deleteUser = async function(userId) {
@@ -290,10 +275,8 @@
         e.preventDefault();
         const name = document.getElementById('addUserName').value.trim();
         const email = document.getElementById('addUserEmail').value.trim();
-        const username = document.getElementById('addUserUsername').value.trim();
         const password = document.getElementById('addUserPassword').value;
-        const role = document.getElementById('addUserRole').value;
-        const result = await App.Auth.register(username, password, name, role, email);
+        const result = await App.Auth.register({ email: email, password: password, name: name });
         if (result.success) {
           showMessage('addUserMessage', result.message, 'success');
           document.getElementById('addUserForm').reset();
