@@ -661,11 +661,24 @@ const App = window.App = Object.assign(window.App || {}, {
             // doesn't yet exist (e.g., a user signed up under an older
             // build that didn't write the profile doc on register, or
             // whose doc was deleted). update() requires the doc to
-            // exist; set-with-merge creates it on-the-fly with the
-            // specified fields only. Other profile fields (displayName,
-            // createdAt) are NOT created by this path -- they're set
-            // when the user signs up via the register flow.
+            // exist; set-with-merge creates it on-the-fly.
+            //
+            // Phase 6 follow-up fix: include `email`, `displayName`, and
+            // `createdAt` in the merge-set payload because Firestore
+            // treats `set` on a non-existent doc as a CREATE, gated by
+            //   allow create: if isSelf(userId)
+            //              && request.resource.data.email is string;
+            // Without `email` in the payload, the create rule fails
+            // and the entire transaction rolls back. We pull the
+            // values from the Firebase Auth currentUser, which is
+            // authenticated by Firebase itself -- no security
+            // regression. For an existing doc, set-with-merge just
+            // merges these fields in alongside isAdmin etc., which
+            // matches what the standard register flow already writes.
             tx.set(userRef, {
+              email: (u.email || ''),
+              displayName: (u.displayName || u.name || u.email || ''),
+              createdAt: new Date().toISOString(),
               isAdmin: true,
               isAdminClaimed: true,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
