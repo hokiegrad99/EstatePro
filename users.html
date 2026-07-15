@@ -68,23 +68,23 @@
         <!-- Banner explaining the page's post-Phase-4 role.
              Sits at the top of the panel; subtitle + 4 bullets
              + a pointer to executor.html for per-estate concerns. -->
-        <div class="card" style="background:rgba(37,99,235,0.05); border:1px solid rgba(37,99,235,0.18); margin-bottom:1.5rem;">
-          <div class="card-body" style="padding:1rem 1.25rem;">
-            <div style="display:flex; gap:0.75rem; align-items:flex-start;">
-              <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#2563eb; flex-shrink:0; margin-top:0.15rem;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+        <div class="card platform-admin-banner">
+          <div class="card-body">
+            <div class="platform-admin-banner-body">
+              <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
               <div>
-                <h3 style="margin:0 0 0.4rem; font-size:1rem; color:#1e40af;">Platform Admin</h3>
-                <p style="margin:0; font-size:0.9rem; color:var(--text-secondary); line-height:1.55;">
+                <h3>Platform Admin</h3>
+                <p>
                   Platform-level concerns that aren't part of any single estate live here.
                 </p>
-                <ul style="margin:0.5rem 0 0; padding-left:1.25rem; font-size:0.85rem; color:var(--text-secondary); line-height:1.55;">
+                <ul>
                   <li><strong>Register a User</strong> &mdash; create a Firebase Auth account so someone can sign in even without an invite.</li>
                   <li><strong>Reset Password</strong> &mdash; reset another user's Firebase Auth password.</li>
                   <li><strong>Delete User</strong> &mdash; remove a user's account from the platform entirely.</li>
                   <li><strong>Export Accounts CSV</strong> &mdash; audit-friendly listing of everyone with platform access.</li>
                 </ul>
-                <p style="margin:0.7rem 0 0; font-size:0.8rem; color:var(--text-secondary);">
-                  Per-estate membership (roles, invitations, member removal) lives on <a href="executor.html" style="color:var(--primary-color);">Executor</a>. The role dropdowns that used to be on this page were confusing post-Phase&nbsp;4 &mdash; the per-estate model owns those.
+                <p>
+                  Per-estate membership (roles, invitations, member removal) lives on <a href="executor.html">Executor</a>. The role dropdowns that used to be on this page were confusing post-Phase&nbsp;4 &mdash; the per-estate model owns those.
                 </p>
               </div>
             </div>
@@ -106,8 +106,9 @@
                 <thead>
                   <tr>
                     <th>Name</th>
-                    <th>Username</th>
                     <th>Email</th>
+                    <th>Admin</th>
+                    <th>Created</th>
                     <th style="text-align:right">Actions</th>
                   </tr>
                 </thead>
@@ -147,28 +148,27 @@
     </div>
   </div>
 
-  <!-- Reset Password Modal -->
+  <!-- Reset Password Modal (Phase 8: B1 send-email flow) -->
   <div class="modal-overlay" id="resetPasswordModal" role="dialog" aria-modal="true" aria-labelledby="resetPasswordTitle">
-    <div class="modal" style="max-width:400px;">
+    <div class="modal" style="max-width:420px;">
       <div class="modal-header">
-        <div class="modal-title" id="resetPasswordTitle">Reset Password</div>
+        <div class="modal-title" id="resetPasswordTitle">Send Password Reset Email</div>
         <button type="button" class="modal-close" onclick="App.UI.closeModal('resetPasswordModal')" aria-label="Close reset password modal">&times;</button>
       </div>
       <div class="modal-body">
-        <p style="margin-bottom:1rem; color:var(--text-secondary); font-size:0.9rem;">Set a new password for <strong id="resetPasswordUserName"></strong>.</p>
-        <div class="form-group">
-          <label class="form-label" for="resetPasswordInput">New Password</label>
-          <input type="password" id="resetPasswordInput" class="form-input" placeholder="Enter new password" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="resetPasswordConfirm">Confirm Password</label>
-          <input type="password" id="resetPasswordConfirm" class="form-input" placeholder="Confirm new password" required>
-        </div>
-        <div id="resetPasswordMessage"></div>
+        <p style="margin-bottom:0.75rem; color:var(--text-secondary); font-size:0.9rem;">
+          Firebase Auth will send a password-reset link to <strong id="resetPasswordUserName"></strong>.
+          They click the link to set a new password themselves &mdash; you never see the new password.
+        </p>
+        <p style="margin-bottom:0; color:var(--text-secondary); font-size:0.85rem;">
+          <strong>Note:</strong> soft-deleted accounts won&rsquo;t receive the email &mdash; Firebase Auth
+          silently no-ops on unknown addresses. This works only for active accounts.
+        </p>
+        <div id="resetPasswordMessage" style="margin-top:1rem;"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="App.UI.closeModal('resetPasswordModal')">Cancel</button>
-        <button type="button" class="btn btn-primary" id="resetPasswordConfirmBtn">Reset Password</button>
+        <button type="button" class="btn btn-primary" id="resetPasswordConfirmBtn">Send Reset Email</button>
       </div>
     </div>
   </div>
@@ -191,7 +191,7 @@
       document.getElementById('userAvatar').textContent = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
       // Admin check
-      if (!App.Permissions.canManageUsers()) {
+      if (!App.Permissions.isPlatformAdmin()) {
         document.getElementById('accessDenied').style.display = 'block';
         document.getElementById('usersPanel').style.display = 'none';
         return;
@@ -202,22 +202,57 @@
 
       let pendingResetUserId = null;
 
-      function renderUsers() {
-        const users = App.Auth.getUsers();
+      // Phase 8: async because getUsers() now hits Firestore. We
+      // pre-compute activeAdminCount so each row's Delete button can
+      // be disabled when the row IS the only Admin left. The
+      // App.onReady callback at the bottom of this script fires
+      // renderUsers() and the promise is fire-and-forget.
+      async function renderUsers() {
+        let users = [];
+        try {
+          users = await App.Auth.getUsers();
+        } catch (e) {
+          console.warn('[EstatePro] renderUsers getUsers failed:', e && e.message);
+          users = [];
+        }
         const currentUser = App.Auth.getCurrentUser();
         const tbody = document.querySelector('#usersTable tbody');
+        if (!users.length) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-secondary); padding:1rem;">No registered users yet. Use the Register form below to create one.</td></tr>';
+          return;
+        }
+        const activeAdminCount = users.filter(u => u.isAdmin === true).length;
         tbody.innerHTML = users.map(u => {
-          const isSelf = currentUser && currentUser.id === u.id;
+          const isSelf = currentUser && currentUser.uid === u.uid;
+          const isLastAdmin = u.isAdmin === true && activeAdminCount === 1 && !isSelf;
+          const deleteDisabled = isSelf || isLastAdmin;
+          const deleteTitle = isSelf
+            ? 'You cannot delete yourself. Ask another Admin to demote and remove you.'
+            : isLastAdmin
+            ? 'This is the only active platform Admin. Promote another user first.'
+            : 'Soft-delete this user (sets isDeleted + queues password-reset email).';
+          // createdAt may arrive as ISO string (register flow) or a
+          // Firestore Timestamp; formatDate wants YYYY-MM-DD.
+          let createdStr = '\u2014';
+          if (typeof u.createdAt === 'string' && u.createdAt.length >= 10) {
+            createdStr = App.UI.formatDate(u.createdAt.substring(0, 10));
+          } else if (u.createdAt && typeof u.createdAt.toDate === 'function') {
+            createdStr = App.UI.formatDate(u.createdAt.toDate().toISOString().substring(0, 10));
+          }
+          const safeUid  = App.UI.escapeHtml(u.uid || u.id || '');
+          const safeMail = App.UI.escapeHtml(u.email || '');
+          const safeName = App.UI.escapeHtml(u.displayName || u.email || '');
 return `<tr>
-            <td>${App.UI.escapeHtml(u.name)}</td>
-            <td>${App.UI.escapeHtml(u.username)}${isSelf ? ' <span class="badge badge-default">You</span>' : ''}</td>
-            <td>${App.UI.escapeHtml(u.email)}</td>
+            <td>${safeName}${isSelf ? ' <span class="badge badge-default">You</span>' : ''}</td>
+            <td>${safeMail}</td>
+            <td>${u.isAdmin ? '<span class="badge badge-info">Admin</span>' : '<span class="badge badge-default">User</span>'}</td>
+            <td>${createdStr}</td>
             <td style="text-align:right;">
               <div class="btn-group" style="justify-content:flex-end;">
-                <button class="btn btn-sm btn-secondary" onclick="openResetPassword(${u.id}, '${App.UI.escapeHtml(u.name)}')" title="Reset Password">
+                <button class="btn btn-sm btn-secondary" onclick="openResetPassword('${safeUid}', '${safeMail}', '${safeName}')" title="Send password-reset email">
                   <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0110 0v4"></path></svg>
                 </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})" title="Delete User" ${isSelf || isAdmin ? 'disabled' : ''}>
+                <button class="btn btn-sm btn-danger" onclick="deleteUser('${safeUid}')" title="${App.UI.escapeHtml(deleteTitle)}"${deleteDisabled ? ' disabled' : ''}>
                   <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg>
                 </button>
               </div>
@@ -228,40 +263,43 @@ return `<tr>
       }
 
       window.deleteUser = async function(userId) {
-        if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+        // Phase 8: soft-delete is the canonical action. The user doc
+        // gets a deletedAt/deletedBy/updatedAt audit trail, and a
+        // Firebase Auth password-reset email is queued to neutralize
+        // any existing session. The confirm() text explains what the
+        // Admin is actually authorizing.
+        if (!confirm('Soft-delete this user?\n\nTheir /users/{uid} profile will be flagged isDeleted=true; they lose any platform-admin authority instantly; and a Firebase Auth password-reset email will be queued so their existing session becomes useless on next login.\n\nYou can re-invite them later via the Executor page if the deletion is reversed.')) return;
         const result = await App.Auth.deleteUser(userId);
         if (result.success) {
           showMessage('addUserMessage', result.message, 'success');
+          // Re-fetch the list -- getUsers() filters out isDeleted rows
+          // so the just-deleted user vanishes from the table.
           renderUsers();
         } else {
           showMessage('addUserMessage', result.message, 'danger');
         }
       };
 
-      window.openResetPassword = function(userId, userName) {
+      window.openResetPassword = function(userId, userEmail, userName) {
+        // Phase 8: B1 model. We only need the uid; the server-side
+        // resetUserPassword() looks up /users/{uid}.email and calls
+        // firebase.auth().sendPasswordResetEmail. userEmail here is just
+        // the modal label so the Admin sees WHO will receive the email
+        // BEFORE clicking send.
         pendingResetUserId = userId;
-        document.getElementById('resetPasswordUserName').textContent = userName;
-        document.getElementById('resetPasswordInput').value = '';
-        document.getElementById('resetPasswordConfirm').value = '';
+        document.getElementById('resetPasswordUserName').textContent = userName || userEmail || '(this user)';
         document.getElementById('resetPasswordMessage').innerHTML = '';
         App.UI.openModal('resetPasswordModal');
       };
 
       document.getElementById('resetPasswordConfirmBtn').addEventListener('click', async () => {
+        // Phase 8: no password input. App.Auth.resetUserPassword does the
+        // admin gate + email lookup + sendPasswordResetEmail; we relay
+        // success/failure into the modal slot.
         if (!pendingResetUserId) return;
-        const password = document.getElementById('resetPasswordInput').value;
-        const confirm = document.getElementById('resetPasswordConfirm').value;
-        if (password !== confirm) {
-          showMessage('resetPasswordMessage', 'Passwords do not match.', 'danger');
-          return;
-        }
-        if (password.length < 6) {
-          showMessage('resetPasswordMessage', 'Password must be at least 6 characters.', 'danger');
-          return;
-        }
-        const result = await App.Auth.resetUserPassword(pendingResetUserId, password);
+        const result = await App.Auth.resetUserPassword(pendingResetUserId);
         if (result.success) {
-          showMessage('resetPasswordMessage', 'Password reset successfully.', 'success');
+          showMessage('resetPasswordMessage', result.message, 'success');
           setTimeout(() => {
             App.UI.closeModal('resetPasswordModal');
             pendingResetUserId = null;
@@ -286,16 +324,24 @@ return `<tr>
         }
       });
 
-      document.getElementById('exportUsersBtn').addEventListener('click', () => {
-        const users = App.Auth.getUsers();
-        const exportData = users.map(u => ({
-          Name: u.name,
-          Username: u.username,
-          Email: u.email,
-          Role: u.role,
-          ID: u.id
-        }));
-        App.Export.toCSV(exportData, 'estatepro-users.csv');
+      document.getElementById('exportUsersBtn').addEventListener('click', async () => {
+        // Phase 8: getUsers() is now async + reads from Firestore, so
+        // we await. The CSV column set reflects the actual /users doc
+        // shape: Name (displayName), Email, Admin (Yes/No), Created
+        // (ISO string or empty), UID.
+        try {
+          const users = await App.Auth.getUsers();
+          const exportData = users.map(u => ({
+            Name: u.displayName || '',
+            Email: u.email || '',
+            Admin: u.isAdmin ? 'Yes' : 'No',
+            Created: u.createdAt ? (typeof u.createdAt === 'string' ? u.createdAt : u.createdAt.toDate().toISOString()) : '',
+            UID: u.uid
+          }));
+          App.Export.toCSV(exportData, 'estatepro-users.csv');
+        } catch (e) {
+          showMessage('addUserMessage', 'Could not export: ' + (e && e.message || e), 'danger');
+        }
       });
 
       function showMessage(containerId, message, type) {

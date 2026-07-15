@@ -290,7 +290,7 @@
         } else {
           estate.heirs.push(heir);
         }
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         App.UI.closeModal('heirModal');
         renderHeirs();
       });

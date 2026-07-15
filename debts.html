@@ -293,7 +293,7 @@
         } else {
           estate.debts.push(debt);
         }
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         App.UI.closeModal('debtModal');
         renderDebts();
       });

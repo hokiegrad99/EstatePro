@@ -303,7 +303,7 @@
         } else {
           estate.assets.push(asset);
         }
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         App.UI.closeModal('assetModal');
         renderAssets();
       });

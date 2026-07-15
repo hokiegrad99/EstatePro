@@ -436,6 +436,19 @@ const App = window.App = Object.assign(window.App || {}, {
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
             estRefUpdate['roles.' + u.uid] = role;
+            // Phase 11: snapshot the joining user's displayName + email
+            // onto /estates/{id}.members.<uid>. The pre-read happens
+            // BEFORE runTransaction (tx rules forbid mid-tx reads) --
+            // see App.User.snapshotFromUserDoc. Persisted alongside
+            // roles so existing rule branches' frozen-fields equality
+            // still holds: isInviteConsumption only inspects memberIds/
+            // roles values, both of which we already touch.
+            var _p11JoinerSnap = await App.User.snapshotFromUserDoc(u.uid, u);
+            estRefUpdate['members.' + u.uid] = {
+              displayName: _p11JoinerSnap.displayName,
+              email: _p11JoinerSnap.email,
+              joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
             tx.update(estRef, estRefUpdate);
           });
           // Active estate switched -- the new member now has access.
@@ -564,10 +577,18 @@ const App = window.App = Object.assign(window.App || {}, {
           var newMemberIds = curMemberIds.filter(function (id) { return id !== targetUid; });
           var newRoles = Object.assign({}, (cur && cur.roles) || {});
           delete newRoles[targetUid];
-          await estRef.update({
+          var updatePayload = {
             memberIds: newMemberIds,
             roles: newRoles
-          });
+          };
+          // Phase 11: clean up the members.<uid> snapshot so removed
+          // users don't linger in name lookups. FieldValue.delete()
+          // drops the key without disturbing siblings -- memberIds
+          // and roles paths meet the rule's isRemoveMember diff
+          // constraint (exactly one roles key removed; this dot-path
+          // delete is on a SEPARATE top-level key).
+          updatePayload['members.' + targetUid] = firebase.firestore.FieldValue.delete();
+          await estRef.update(updatePayload);
           return { success: true, message: 'Member removed.' };
         } catch (err) {
           return {
@@ -721,9 +742,30 @@ const App = window.App = Object.assign(window.App || {}, {
               name: (opts.executorName && String(opts.executorName).trim()) || u.name || u.email || 'Executor',
               relationship: 'Executor'
             },
+            // Phase 10: estate name. Either caller-supplied (validated
+            // non-empty + 80 chars in the modal) OR derived from the
+            // decedent so legacy Admin-created docs no longer fall through
+            // the sidebar selector to "Estate yNBn6F". The bootstrap
+            // path (bootstrap.html) already writes a user-typed name;
+            // this brings the Admin path up to parity.
+            name: (opts.name != null && String(opts.name).trim())
+                  ? String(opts.name).trim().substring(0, 80)
+                  : ('Estate of ' + String(opts.decedent).trim()).substring(0, 80),
             tasks: [], assets: [], debts: [], cashflow: [], heirs: [], distributions: []
           };
           payload.roles[u.uid] = 'executor';
+          // Phase 11: seed the members snapshot map so the executor
+          // page renders THIS user by name instead of as the auto-id.
+          // snapshotFromUserDoc does best-effort: live read /users/{uid}
+          // first, then fall back to the hydrated session user. joinedAt
+          // is serverTimestamp() for an audit trail consistent across clocks.
+          var _p11FounderSnap = await App.User.snapshotFromUserDoc(u.uid, u);
+          payload.members = {};
+          payload.members[u.uid] = {
+            displayName: _p11FounderSnap.displayName,
+            email: _p11FounderSnap.email,
+            joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
           await newRef.set(payload);
           return { success: true, message: 'Estate created.', estateId: newRef.id };
         } catch (err) {
@@ -738,17 +780,160 @@ const App = window.App = Object.assign(window.App || {}, {
     // Invite.createInvite and Invite.listPendingInvites. A helper would
     // belong on App itself, not next to App.Auth.Invite.)
 
-    // ---- Compatibility stubs for legacy callers (Sync export, users.html) ----
-    // Phase 1 does not back the users list yet. These return safe values so
-    // legacy pages don't crash; they are no-ops for new functionality.
-    getUsers() { return []; },
-    saveUsers() { return Promise.resolve(); },
-    async restoreDefaultUsers() {
-      return { success: false, message: 'Demo defaults are removed in this build. Sign up via the Register form.' };
+    // ---- Phase 8: real Platform Admin user-ops ----
+    // Pre-Phase 8 each of the user-ops below was a one-liner that
+    // returned an error toast on click. Phase 8 wires them to real
+    // Firestore + Firebase Auth flows. The page-side gate
+    // (App.Permissions.isPlatformAdmin) hides these from executors. The
+    // server-side gate (firestore.rules isPlatformAdmin + isSoftDeleteTarget)
+    // backstops the client. saveUsers + restoreDefaultUsers + updateUserRole
+    // remain as Phase-1 stubs (they were used by Sync export/import which
+    // is now iterating against real /users docs); fixing Sync export/import
+    // is a separate follow-up.
+
+    // ---- listUsers / getUsers ----
+    // Lists every /users doc the caller can see. Firestore applies the
+    // /users/{uid}.read rule per-doc, so a non-Admin calling .get() falls
+    // through the read rule and we get [] (the rule denies without
+    // throwing). We filter isDeleted + sort by createdAt client-side to
+    // avoid needing a composite index for this query. The page calls
+    // getUsers() then renders rows with admin/delete guards below.
+    async getUsers() {
+      var caller = App.Auth.getCurrentUser();
+      if (!caller || caller.isAdmin !== true) return [];
+      if (!App.Firebase || !App.Firebase.db) return [];
+      try {
+        var snap = await App.Firebase.db.collection('users').get();
+        var rows = snap.docs.map(function (d) {
+          var x = d.data() || {};
+          return {
+            id: d.id,
+            uid: d.id,
+            email: x.email || '',
+            displayName: x.displayName || '',
+            createdAt: x.createdAt || null,
+            isAdmin: x.isAdmin === true,
+            isAdminClaimed: x.isAdminClaimed === true,
+            isDeleted: x.isDeleted === true,
+            // The three fields the soft-delete update writes. Surfaced
+            // here so an audit UI can render them when we add one.
+            deletedAt: x.deletedAt || null,
+            deletedBy: x.deletedBy || null
+          };
+        });
+        rows.sort(function (a, b) {
+          var at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          var bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bt - at;
+        });
+        // Phase 8 fix (reviewer item F): filter out soft-deleted rows
+        // before returning. Otherwise the page's table + Export CSV
+        // would surface accounts we just struck off the books. The
+        // soft-delete write itself doesn't enumerate; only this read
+        // point needs to filter, which keeps the audit trail (the row
+        // still sits in Firestore with isDeleted/deletedAt/deletedBy)
+        // intact for an admin tool / undelete feature.
+        return rows.filter(function (r) { return !r.isDeleted; });
+      } catch (e) {
+        console.warn('[EstatePro] getUsers failed:', e && e.message);
+        return [];
+      }
     },
-    async updateUserRole() { return { success: false, message: 'Per-user roles are not used in Phase 1. Use estate memberships in Phase 4.' }; },
-    async deleteUser() { return { success: false, message: 'Not available in Phase 1.' }; },
-    async resetUserPassword() { return { success: false, message: 'Use the Firebase Auth "reset password" flow instead.' }; },
+
+    // ---- deleteUser (soft-delete via .update) ----
+    // Soft-delete marker + a courtesy password-reset email. The Admin's
+    // existing Firebase Auth account is NOT actually destroyed (that
+    // requires Admin SDK / Cloud Functions); the password-reset email
+    // pushes them to set a new password on their next sign-in, AND
+    // firestore.rules isPlatformAdmin() drops their server-side authority
+    // the moment /users/{uid}.isDeleted flips (Phase 8 rule).
+    //
+    // Self-delete + last-admin-delete are blocked client-side here AND
+    // server-side (isPlatformAdmin() gates the request; isSoftDeleteTarget
+    // blocks userId == self; the 4-key affectedKeys whitelist forces a
+    // tidy audit trail). The pre-read checks here give actionable error
+    // messages before the user even tries the write.
+    async deleteUser(targetUid) {
+      var caller = App.Auth.getCurrentUser();
+      if (!caller) return { success: false, message: 'Not signed in.' };
+      if (caller.isAdmin !== true) {
+        return { success: false, message: 'Only platform Admins can delete users.' };
+      }
+      if (!App.Firebase || !App.Firebase.db) {
+        return { success: false, message: 'Firestore not ready.' };
+      }
+      if (!targetUid) return { success: false, message: 'Missing user id.' };
+      if (targetUid === caller.uid) {
+        return { success: false, message: 'You cannot delete your own account. Ask another Admin to demote and remove you.' };
+      }
+      try {
+        var users = await App.Firebase.db.collection('users').get();
+        // Last-admin guard: count active admins EXCLUDING the targetUid
+        // (they're about to be soft-deleted) and EXCLUDING existing isDeleted
+        // rows. If we're the only non-deleted admin after removing them, refuse.
+        var activeAdminCount = 0;
+        users.forEach(function (d) {
+          var x = d.data() || {};
+          if (x.isAdmin === true && x.isDeleted !== true && d.id !== targetUid) activeAdminCount++;
+        });
+        if (activeAdminCount < 1) {
+          return { success: false, message: 'This is the only active platform Admin. Promote another user first, then they can demote and remove this one.' };
+        }
+        await App.Firebase.db.collection('users').doc(targetUid).update({
+          isDeleted: true,
+          deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          deletedBy: caller.uid,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        // B1 courtesy lockout: send a password-reset email so the
+        // target's current session password becomes useless on next login.
+        // firebase.auth().sendPasswordResetEmail silently no-ops on
+        // unknown emails (hardening for account-enumeration attacks), so
+        // this is safe even for orphan /users docs whose Firebase Auth
+        // account is missing.
+        var targetDoc = users.docs.find(function (d) { return d.id === targetUid; });
+        var targetEmail = targetDoc && ((targetDoc.data() || {}).email || '');
+        if (targetEmail) {
+          try { await firebase.auth().sendPasswordResetEmail(targetEmail); }
+          catch (_e) { /* unknown-email is silent */ }
+        }
+        return { success: true, message: 'User soft-deleted; password-reset email queued.' };
+      } catch (err) {
+        return { success: false, message: 'Could not delete user: ' + (err && err.message ? err.message : String(err)) };
+      }
+    },
+
+    // ---- resetUserPassword (B1: send reset email) ----
+    // The only client-side option for resetting ANOTHER user's password
+    // is firebase.auth().sendPasswordResetEmail(targetEmail), which sends
+    // the target a reset link; they click it themselves -- the Admin
+    // never sees the new password. firebase.auth().currentUser.updatePassword
+    // won't work for OTHER users (it requires the active session token
+    // of the target), so B1 is the only choice short of Cloud Functions.
+    //
+    // Backward-compat: the old (uid, password) signature is preserved;
+    // the password argument is ignored (we send an email regardless).
+    async resetUserPassword(targetUid, _ignoredPassword) {
+      var caller = App.Auth.getCurrentUser();
+      if (!caller) return { success: false, message: 'Not signed in.' };
+      if (caller.isAdmin !== true) {
+        return { success: false, message: "Only platform Admins can reset other users' passwords." };
+      }
+      if (!App.Firebase || !App.Firebase.db) {
+        return { success: false, message: 'Firestore not ready.' };
+      }
+      if (!targetUid) return { success: false, message: 'Missing user id.' };
+      try {
+        var userDoc = await App.Firebase.db.collection('users').doc(targetUid).get();
+        if (!userDoc.exists) return { success: false, message: 'User not found.' };
+        var email = (userDoc.data() || {}).email || '';
+        if (!email) return { success: false, message: 'User has no email on file.' };
+        await firebase.auth().sendPasswordResetEmail(email);
+        return { success: true, message: 'Password-reset email sent to ' + email + '.' };
+      } catch (err) {
+        return { success: false, message: 'Could not send reset email: ' + (err && err.message ? err.message : String(err)) };
+      }
+    },
     // Phase 6: legacy phase-1 stub now delegates to the Phase-6 Admin
     // namespace. user-menu dropdown callers still hit this method by name.
     async promoteSelfToAdmin() { return App.Auth.Admin.claimAdmin(); },
@@ -819,6 +1004,74 @@ const App = window.App = Object.assign(window.App || {}, {
       return user.isAdmin === true || user.role === 'Admin';
     },
 
+    // ---- Phase 7: strict platform-admin gate (UI-only) ----
+    // Distinct from canManageUsers (above): estate EXECUTORS have ZERO
+    // platform powers here — only users with the project-wide isAdmin
+    // flag (or the legacy role==='Admin' string) reach this gate. Server-
+    // side enforcement is still the firestore.rules isPlatformAdmin()
+    // helper; this client mirror just hides controls so executors don't
+    // see page chrome (Reset Password, Delete User, audit logs) that
+    // would produce no-op error toasts if clicked.
+    isPlatformAdmin() {
+      const user = App.Auth.getCurrentUser();
+      if (!user) return false;
+      // Strict mirror of firestore.rules' isPlatformAdmin() — global
+      // Admin authority only. Executor role on any specific estate is
+      // irrelevant.
+      return user.isAdmin === true || user.role === 'Admin';
+    },
+
+    // ---- Phase 9: estate delete gate (UI-only) ----
+    // Strict mirror of /estates/{estateId}.delete in firestore.rules:
+    //   - platform Admins → ALL estates (cross-estate authority).
+    //   - executor of THIS specific estate → can retire it.
+    // Other roles (heir, beneficiary) and signed-out users are blocked.
+    // The UI surfaces the executor.html Danger Zone card only when this
+    // returns true.  The active-estate assumption mirrors the rule's
+    // `isMember(estateId)`: canDeleteEstate is gated to the executor's
+    // CURRENTLY BOUND estate because App.Permissions is sync and we don't
+    // want to gate on a cross-doc async read here. Admins get the gate
+    // regardless of which estate they're bound to because their
+    // isPlatformAdmin() covers all of them.
+    canDeleteEstate(estateId) {
+      const user = App.Auth.getCurrentUser();
+      if (!user) return false;
+      if (user.isAdmin === true || user.role === 'Admin') return true;
+      try {
+        const cur = (App.Data && typeof App.Data.getEstate === 'function')
+          ? App.Data.getEstate() : null;
+        const activeId = (App.Data && typeof App.Data.getCurrentEstateId === 'function')
+          ? App.Data.getCurrentEstateId() : (cur && cur.id ? cur.id : null);
+        if (estateId && activeId !== estateId) return false;
+        const roles = (cur && cur.roles) || {};
+        return roles[user.uid] === 'executor';
+      } catch (e) { return false; }
+    },
+
+    // ---- Phase 10: Rename-estate gate (UI-only) ----
+    // Strict mirror of the firestore.rules `/estates/{estateId}.update`
+    // branches that allow mutating `name`: any platform Admin (cross-
+    // estate authority) OR the executor of THIS specific active estate.
+    // Same shape as canDeleteEstate so the two cards' visibility logic
+    // stays symmetric. The field `name` is NOT in the frozen-fields
+    // chain (memberIds, roles, pendingInvites, __founderSecret,
+    // createdBy, createdAt) so both branches accept a { name: '...' }
+    // partial update without any rule change.
+    canRenameEstate(estateId) {
+      const user = App.Auth.getCurrentUser();
+      if (!user) return false;
+      if (user.isAdmin === true || user.role === 'Admin') return true;
+      try {
+        const cur = (App.Data && typeof App.Data.getEstate === 'function')
+          ? App.Data.getEstate() : null;
+        const activeId = (App.Data && typeof App.Data.getCurrentEstateId === 'function')
+          ? App.Data.getCurrentEstateId() : (cur && cur.id ? cur.id : null);
+        if (estateId && activeId !== estateId) return false;
+        const roles = (cur && cur.roles) || {};
+        return roles[user.uid] === 'executor';
+      } catch (e) { return false; }
+    },
+
     canView() {
       return App.Auth.isLoggedIn();
     },
@@ -827,6 +1080,93 @@ const App = window.App = Object.assign(window.App || {}, {
       const labels = { Admin: 'Administrator', Executor: 'Executor', Heir: 'Heir', Beneficiary: 'Beneficiary' };
       return labels[role] || role;
     }
+  },
+
+  /* ============================
+     USER (Phase 11)
+     Cross-user display helpers. The executor page needs to identify
+     other estate members by name, but firestore.rules restricts
+     /users/{uid} reads to isSelf OR isPlatformAdmin(). Phase 11
+     works around this with snapshot-on-parent (see /estates/{id}.
+     members.<uid> -- a denormalized cache of {displayName, email}
+     populated at every join path: bootstrap.html, createNewEstate,
+     consumeInviteFromUrl. App.Data.backfillLegacyMembers() handles
+     estates whose `members` map is missing or partial).
+     ============================ */
+  User: {
+    // ---- shortUid(uid) ----
+    // Single source of truth for the truncated-uid rendering used
+    // across executor.html flash messages + the confirm dialog. Long
+    // Firebase UIDs collapse to <first 7 chars>...<last 3 chars>;
+    // short uids render verbatim. Returns '' for null/empty input.
+    shortUid(uid) {
+      if (!uid) return '';
+      var s = String(uid);
+      return s.length > 12 ? s.substring(0, 7) + '\u2026' + s.substring(s.length - 3) : s;
+    },
+
+    // ---- resolveMemberName(estate, uid) ----
+    // Canonical friendly-name resolver. Order of preference:
+    //   1. estate.members[uid].displayName  (real name; set on join)
+    //   2. estate.members[uid].email       (their login email; helps
+    //                                       when displayName was empty)
+    //   3. shortUid(...)                   (last-resort truncated uid)
+    // The chain matches the Phase 10 estate-name fallback so screens
+    // never mix UID- and name-styled identifiers within the same view.
+    resolveMemberName(estate, uid) {
+      if (!uid) return '';
+      var m = (estate && estate.members) ? estate.members[uid] : null;
+      if (m) {
+        var dn = (typeof m.displayName === 'string') ? m.displayName.trim() : '';
+        if (dn) return dn;
+        var em = (typeof m.email === 'string') ? m.email.trim() : '';
+        if (em) return em;
+      }
+      return this.shortUid(uid);
+    },
+
+    // ---- snapshotFromUserDoc(uid, fallbackUser) ----
+    // Builds the { displayName, email } sub-document we persist to
+    // /estates/{id}.members.<uid>. Live .get() picks up the user's
+    // CURRENT displayName even if they've changed it since the invite
+    // was minted. fallbackUser (typically App.Auth.getCurrentUser())
+    // is used when a live read fails or the doc doesn't exist.
+    // Reviewer note: surfaces console.warn on read failure so a stuck
+    // silent-UID-demotion isn't invisible during debugging.
+    async snapshotFromUserDoc(uid, fallbackUser) {
+      var snap = { displayName: '', email: '' };
+      if (uid && App.Firebase && App.Firebase.db) {
+        try {
+          var us = await App.Firebase.db.collection('users').doc(uid).get();
+          if (us && us.exists) {
+            var d = us.data() || {};
+            if (typeof d.displayName === 'string') snap.displayName = d.displayName.trim();
+            if (typeof d.email === 'string') snap.email = d.email.trim();
+          }
+        } catch (e) {
+          console.warn('[EstatePro Phase 11] snapshotFromUserDoc read for', uid, 'failed:', e && e.message ? e.message : e);
+        }
+      }
+      if (fallbackUser && fallbackUser.uid === uid) {
+        if (!snap.displayName) snap.displayName = (fallbackUser.displayName || fallbackUser.name || '').trim();
+        if (!snap.email) snap.email = (fallbackUser.email || '').trim();
+      }
+      return snap;
+    },
+
+    // ---- Phase 12: formatMemberLabel(estate, uid) ----
+    // Single source of truth for the 'Name (shortUid)' label
+    // used in changeMemberRole + removeMemberAction flash
+    // messages. Replaces the duplicated string-equality ternary.
+    // Returns { displayName, shortUid, isIdentityOnly, label }
+    // so callers do not compose the label string inline.
+    formatMemberLabel(estate, uid) {
+      var displayName = this.resolveMemberName(estate, uid);
+      var shortUid = this.shortUid(uid);
+      var isIdentityOnly = String(displayName || '') === String(shortUid || '');
+      var label = isIdentityOnly ? shortUid : (displayName + ' (' + shortUid + ')');
+      return { displayName: displayName, shortUid: shortUid, isIdentityOnly: isIdentityOnly, label: label };
+    },
   },
 
   /* ============================
@@ -1266,6 +1606,12 @@ const App = window.App = Object.assign(window.App || {}, {
         var estate = savedEstate || estates[0];
         this._currentEstateId = estate.id;
         this._cache = this._normalize(estate._doc);
+        // Phase 11: lazy one-shot backfill of any missing
+        // /estates/{id}.members.<uid> snapshots. Fire-and-forget;
+        // idempotent on subsequent calls. backfillLegacyMembers
+        // catches its own internal errors so we don't need an outer
+        // try/catch here (reviewer redundancy fix).
+        this.backfillLegacyMembers(this._cache, this._currentEstateId);
       } catch (e) {
         console.error('[EstatePro] App.Data.initAsync failed:', e);
         this._cache = this.getEmptyEstate();
@@ -1356,11 +1702,39 @@ const App = window.App = Object.assign(window.App || {}, {
         catch (e) { /* ignore */ }
         return;
       }
-      var payload;
-      try { payload = JSON.parse(JSON.stringify(this._cache)); }
-      catch (e) { console.error('[EstatePro] _flush: cannot serialize cache', e); return; }
-      // Stamp updatedAt so multi-device users can tell which copy is newer.
-      payload.updatedAt = new Date().toISOString();
+      // ---- Phase 13: partial-update payload (round-trip rule-rejection fix) ----
+      // Earlier this function did `JSON.parse(JSON.stringify(this._cache))`
+      // and shoved the entire doc back via .update(). That silently broke
+      // EVERY save from cache because Firestore Timestamps round-trip
+      // through JSON.stringify as plain {seconds:Number, nanoseconds:Number}
+      // objects, NOT as Timestamp instances. The firestore.rules `/estates/{id}`
+      // executor + admin update branches require strict byte-equal on
+      //   createdAt == createdAt, memberIds == memberIds, roles == roles,
+      //   pendingInvites == pendingInvites, createdBy == createdBy,
+      //   __founderSecret (missing OR equal).
+      // A plain-object Timestamp fails the byte-equal check, so the rule
+      // denies the write and the catch block's console.error is the ONLY
+      // signal the user ever sees -- the asset/heir/etc. they just added
+      // sits in the cache and appears to render but never reaches Firestore.
+      //
+      // Fix: send ONLY the explicitly-mutable top-level fields, mirroring
+      // the working partial-update pattern already established by
+      //   - Data.renameEstate()       (Phase 10: .update({name, updatedAt}))
+      //   - Data.backfillLegacyMembers() (Phase 11: dot-path members.<uid>)
+      // updatedAt is stamped with FieldValue.serverTimestamp() so the
+      // cross-device "last write" stamp is server-canonical (not subject
+      // to client clock skew, and remains a Firestore Timestamp rather
+      // than a stringified plain object).
+      var MUTABLE_TOP_LEVEL_KEYS = [
+        'name', 'decedent', 'executor',
+        'tasks', 'assets', 'debts', 'cashflow', 'heirs', 'distributions'
+      ];
+      var payload = {};
+      for (var i = 0; i < MUTABLE_TOP_LEVEL_KEYS.length; i++) {
+        var k = MUTABLE_TOP_LEVEL_KEYS[i];
+        if (this._cache[k] !== undefined) payload[k] = this._cache[k];
+      }
+      payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
       try {
         await App.Firebase.db.collection('estates').doc(this._currentEstateId).update(payload);
       } catch (e) {
@@ -1434,6 +1808,251 @@ const App = window.App = Object.assign(window.App || {}, {
       try { await this.flushNow(); }
       catch (e) { console.error('[EstatePro] clearAllEstateData flush failed:', e); }
       return { success: true, message: 'All estate data has been cleared. The estate is now empty.' };
+    },
+
+    // ---- Phase 10: renameEstate(estateId, newName) ----
+    // Updates only the top-level `name` field on /estates/{estateId}.
+    // Gated by App.Permissions.canRenameEstate (UI) + the existing
+    // firestore.rules `/estates/{estateId}.update` branches (server):
+    //   - isPlatformAdmin() branch lets any Admin rename any estate
+    //     (with frozen-fields byte-equality satisfied automatically
+    //     by a partial .update({name}));
+    //   - the Phase 2 executor-write branch lets the executor of THIS
+    //     estate rename it (same frozen-fields reasoning);
+    //   - the Phase-4 invite-consume / Phase-5 modify-member / remove-
+    //     member branches do NOT touch name, so a misnamed estate doc
+    //     won't break any of those flows.
+    //
+    // We deliberately use a PARTIAL .update({ name, updatedAt }) rather
+    // than saveEstate() round-tripping the FULL cache -- a fewer-byte
+    // payload, and unaffected-by: the executor's debounced cache
+    // writes that might race the rename request.
+    //
+    // After Firestore round-trip we mutate _cache.name in memory so
+    // subsequent renders use the new name without an explicit reload,
+    // then call initEstateSelector() to update the sidebar dropdown in
+    // place. Caller's responsibility: show their own toast; this helper
+    // returns { success, message } for them to act on.
+    async renameEstate(estateId, newName) {
+      var caller = App.Auth.getCurrentUser();
+      if (!caller) return { success: false, message: 'Not signed in.' };
+      if (!App.Firebase || !App.Firebase.db) {
+        return { success: false, message: 'Firestore not ready.' };
+      }
+      if (!estateId) return { success: false, message: 'Missing estate id.' };
+      // Pre-flight client-side gate (mirrors the rename branches of
+      // firestore.rules). canRenameEstate signature strips the
+      // estateId arg when called with no per-doc target, so we pass
+      // through.
+      var allowed = false;
+      try {
+        allowed = App.Permissions.canRenameEstate(estateId);
+      } catch (e) { allowed = false; }
+      if (!allowed) {
+        return { success: false, message: 'Only the executor of this estate (or a platform Admin) can rename it.' };
+      }
+      var trimmed = String(newName == null ? '' : newName).trim();
+      if (!trimmed) {
+        return { success: false, message: 'Estate name cannot be empty.' };
+      }
+      if (trimmed.length > 80) trimmed = trimmed.substring(0, 80);
+      try {
+        // Mutate the in-memory cache BEFORE awaiting the Firestore
+        // round-trip.  This closes a small debounce race: an executor
+        // mid-edit on the active estate has a saveEstate() debounced
+        // for 500ms; if it fires AFTER our `.update()` succeeds but
+        // BEFORE we update the cache, the snapshot the executor form
+        // holds (with the OLD `name`) gets written back and wipes
+        // the rename.  Cache-first ensures any concurrent debounced
+        // save coalesces around the new name.
+        if (this._cache) this._cache.name = trimmed;
+        await App.Firebase.db.collection('estates').doc(estateId).update({
+          name: trimmed,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        // Re-render the sidebar dropdown in place so the picker shows
+        // the new name immediately. initEstateSelector is a no-op on
+        // pages that lack the selector slot, so calling it from a page
+        // other than one with a sidebar is safe.
+        try { App.UI && App.UI.initEstateSelector && App.UI.initEstateSelector(); }
+        catch (e) { /* ignore -- a reload fallback is acceptable */ }
+        return {
+          success: true,
+          message: 'Estate name saved.',
+          estateId: estateId,
+          name: trimmed
+        };
+      } catch (err) {
+        return {
+          success: false,
+          message: 'Could not rename estate: ' + (err && err.message ? err.message : String(err))
+        };
+      }
+    },
+
+    // ---- Phase 11: backfillLegacyMembers(estate, estateId) ----
+    // One-shot lazy backfill: if the bound estate has memberIds but
+    // its `members` map is missing/partial (legacy Estate 1+, debt
+    // path) this fetches the missing profile docs in parallel and
+    // writes them back as per-key dot-notation updates. Designed
+    // to be called fire-and-forget from initAsync so a page reload
+    // resolves the Bobo-Smith-style 'UID display' bug without
+    // rewriting history.
+    //
+    // Idempotent: second call finds members[uid].displayName set
+    // for every memberId and returns immediately. Concurrent callers
+    // (two tabs) each commit disjoint dot-path keys so neither
+    // clobbers the other's snapshot union (reviewer race fix --
+    // sending a single `members: merged` would REPLACE the server's
+    // map and drop the loser's additions).
+    async backfillLegacyMembers(estate, estateId) {
+      if (!estate || !estateId) return;
+      if (!App.Firebase || !App.Firebase.db) return;
+      var memberIds = Array.isArray(estate.memberIds) ? estate.memberIds : [];
+      if (memberIds.length === 0) return;
+      var existing = (estate && estate.members) ? estate.members : {};
+      var missing = memberIds.filter(function (uid) {
+        return !existing[uid] || !existing[uid].displayName;
+      });
+      if (missing.length === 0) return;
+      try {
+        var dbRef = App.Firebase.db.collection('estates').doc(estateId);
+        var pairs = await Promise.all(missing.map(function (uid) {
+          return App.Firebase.db.collection('users').doc(uid).get()
+            .then(function (snap) {
+              return [uid, (snap && snap.exists) ? (snap.data() || {}) : null];
+            })
+            .catch(function () { return [uid, null]; });
+        }));
+        var updatePayload = { updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+        var self = this;
+        pairs.forEach(function (pair) {
+          var uid = pair[0]; var data = pair[1];
+          if (!data) return;
+          var snap = {
+            displayName: (typeof data.displayName === 'string') ? data.displayName.trim() : '',
+            email: (typeof data.email === 'string') ? data.email.trim() : ''
+          };
+          updatePayload['members.' + uid] = snap;
+          // Mutate the in-memory cache so the next renderMembers call
+          // reads the friendly name immediately -- no extra Firestore
+          // refetch is needed before the next render.
+          if (self._cache) {
+            self._cache.members = self._cache.members || {};
+            self._cache.members[uid] = snap;
+          }
+        });
+        if (Object.keys(updatePayload).length === 1) return; // only updatedAt; nothing to write
+        await dbRef.update(updatePayload);
+      } catch (e) {
+        // Best-effort: a backfill failure must not crash the page or
+        // block rendering. UID fallback in executor.html handles any
+        // member whose snapshot is still missing.
+        console.warn('[EstatePro] backfillLegacyMembers:', e && e.message ? e.message : e);
+      }
+    },
+
+    // ---- Phase 9: deleteEstate(estateId) ----
+    // Permanently removes a Firestore estate doc + every UNREDEEMED
+    // /invites subcollection doc.  Gated by App.Permissions.canDeleteEstate
+    // (UI) + firestore.rules `allow delete` (server). The pre-flight
+    // reproduces the rule gate so an unauthorized click gets an
+    // actionable error BEFORE the round-trip fails server-side.
+    //
+    // Subcollection cleanup is intentional: a parent-deleted Firestore
+    // doc leaves sub-collection docs as orphans. batch().delete() on
+    // UNREDEEMED invites is permitted by /invites/{inviteId}.delete
+    // (resource.data.redeemedBy == null). REDEEMED invites are NOT
+    // deletable by executors (the existing rule requires redeemedBy
+    // == null), so we count them, leave them alone, and surface the
+    // count via `redeemedInviteOrphans` for transparency -- the user
+    // knows what didn't get cleaned up.
+    //
+    // After delete, we strip localStorage so the user is not auto-bound
+    // back to a missing doc on next reload. The page-side handler is
+    // responsible for redirecting to dashboard.html so they land on a
+    // page that knows how to render the empty case.
+    async deleteEstate(estateId) {
+      var caller = App.Auth.getCurrentUser();
+      if (!caller) return { success: false, message: 'Not signed in.' };
+      if (!App.Firebase || !App.Firebase.db) {
+        return { success: false, message: 'Firestore not ready.' };
+      }
+      if (!estateId) return { success: false, message: 'Missing estate id.' };
+      // Pre-flight client-side gate (mirrors firestore.rules `allow delete`).
+      var isAdmin = caller.isAdmin === true || caller.role === 'Admin';
+      var isExecutorHere = false;
+      try {
+        var cur = App.Data.getEstate();
+        var activeId = App.Data.getCurrentEstateId
+          ? App.Data.getCurrentEstateId()
+          : (cur && cur.id ? cur.id : null);
+        var roles = (cur && cur.roles) || {};
+        if (activeId === estateId && roles[caller.uid] === 'executor') {
+          isExecutorHere = true;
+        }
+      } catch (e) { /* ignore -- treats as not-executor */ }
+      if (!isAdmin && !isExecutorHere) {
+        return { success: false, message: 'Only the executor of this estate (or a platform Admin) can delete it.' };
+      }
+      try {
+        // ---- Sub-collection cleanup ----
+        // Walk /estates/{id}/invites/{inviteId} and batch-delete each
+        // UNREDEEMED one. Rule rejects deletion of REDEEMED invites by
+        // executors so we tally them instead and surface the count.
+        var invSnap = await App.Firebase.db.collection('estates').doc(estateId)
+          .collection('invites').get();
+        var unredeemedCount = 0;
+        var redeemedCount = 0;
+        var batch = App.Firebase.db.batch();
+        invSnap.forEach(function (d) {
+          var data = (d.data && d.data()) || {};
+          if (data.redeemedBy) {
+            redeemedCount++;
+          } else {
+            batch.delete(d.ref);
+            unredeemedCount++;
+          }
+        });
+        if (unredeemedCount > 0) {
+          await batch.commit();
+        }
+        // ---- Parent delete ----
+        await App.Firebase.db.collection('estates').doc(estateId).delete();
+        // ---- Local cleanup ----
+        // Strip the active-estate selection + cached estate so the next
+        // page load re-binds to whatever's next (or to empty).
+        try {
+          if (localStorage.getItem('estatepro_active_estate') === estateId) {
+            localStorage.removeItem('estatepro_active_estate');
+          }
+        } catch (e) { /* ignore */ }
+        try { sessionStorage.removeItem('estatepro_active_estate'); } catch (e) { /* ignore */ }
+        try { localStorage.removeItem('estatepro_estate'); } catch (e) { /* ignore */ }
+        // ---- Build response message ----
+        var msg = 'Estate deleted.';
+        if (unredeemedCount > 0) {
+          msg += ' Revoked ' + unredeemedCount + ' pending invitation' +
+                 (unredeemedCount === 1 ? '' : 's') + '.';
+        }
+        if (redeemedCount > 0) {
+          msg += ' Note: ' + redeemedCount + ' previously-redeemed invitation' +
+                 (redeemedCount === 1 ? '' : 's') +
+                 ' remain in cloud storage (the ruleset does not allow the executor to delete redeemed invite docs).';
+        }
+        return {
+          success: true,
+          message: msg,
+          deletedEstateId: estateId,
+          unredeemedInvitesRevoked: unredeemedCount,
+          redeemedInviteOrphans: redeemedCount
+        };
+      } catch (err) {
+        return {
+          success: false,
+          message: 'Could not delete estate: ' + (err && err.message ? err.message : String(err))
+        };
+      }
     }
   },
 
@@ -1891,6 +2510,11 @@ const App = window.App = Object.assign(window.App || {}, {
         + '        <label class="form-label" for="ceDecedent">Decedent\'s full name <span aria-label="required">*</span></label>'
         + '        <input type="text" id="ceDecedent" class="form-input" placeholder="e.g. Jane Doe" required autocomplete="off">'
         + '      </div>'
+        + '      <div class="form-group">'
+        + '        <label class="form-label" for="ceEstateName">Estate name</label>'
+        + '        <input type="text" id="ceEstateName" class="form-input" placeholder="e.g. Smith Family Estate" maxlength="80" autocomplete="off">'
+        + '        <small style="display:block; color:var(--text-secondary); font-size:0.75rem; margin-top:0.25rem;">Friendly name shown in the sidebar selector and on printed reports. Leave blank to default to <em>Estate of &lt;Decedent&gt;</em> (max 80 chars).</small>'
+        + '      </div>'
         + '      <div class="form-row">'
         + '        <div class="form-group">'
         + '          <label class="form-label" for="ceDateOfDeath">Date of Death</label>'
@@ -1925,6 +2549,12 @@ const App = window.App = Object.assign(window.App || {}, {
           var decedent = document.getElementById('ceDecedent').value.trim();
           var dod = document.getElementById('ceDateOfDeath').value || '';
           var execName = document.getElementById('ceExecutorName').value.trim();
+          // Phase 10: estate name (optional). Empty falls back to
+          // 'Estate of <Decedent>' inside createNewEstate() so the doc
+          // always lands with the sidebar-friendly display name.
+          var estateNameEl = document.getElementById('ceEstateName');
+          var estateName = estateNameEl ? estateNameEl.value.trim() : '';
+          if (estateName.length > 80) estateName = estateName.substring(0, 80);
           if (!decedent) {
             msgEl.innerHTML = '<div class="alert alert-danger">Decedent name is required.</div>';
             submitBtn.disabled = false;
@@ -1934,7 +2564,8 @@ const App = window.App = Object.assign(window.App || {}, {
           var result = await App.Auth.Admin.createNewEstate({
             decedent: decedent,
             dateOfDeath: dod,
-            executorName: execName
+            executorName: execName,
+            name: estateName
           });
           if (result && result.success) {
             msgEl.innerHTML = '<div class="alert alert-success">' + App.UI.escapeHtml(result.message) + ' Switching to the new estate...</div>';
@@ -2162,7 +2793,19 @@ const App = window.App = Object.assign(window.App || {}, {
       var sel = slot.querySelector('#estateSelect');
       if (!sel) return;
       sel.innerHTML = estates.map(function (e) {
-        var name = (e._doc && (e._doc.name || e._doc.title)) || ('Estate ' + e.id.substring(0, 6));
+        // Phase 10 fallback chain for legacy / not-yet-named estates:
+        //   1. e._doc.name -- bootstrap + (new) Admin createNewEstate
+        //      both write this from the modal; user-set value wins.
+        //   2. 'Estate of <decedent.fullName>' -- lazy fallback for
+        //      Admin-created estates that pre-date the Phase 10 fix
+        //      (their doc has no `name` field but does have decedent).
+        //   3. 'Estate <autoId-6>' -- last-resort id prefix, the pre-fix
+        //      behavior.  Kept for docs with NO decedent yet (e.g. a
+        //      bootstrap that left decedent empty) so they still render.
+        var dn = e._doc && e._doc.decedent && e._doc.decedent.fullName;
+        var name = (e._doc && e._doc.name)
+                || (dn && ('Estate of ' + dn))
+                || ('Estate ' + e.id.substring(0, 6));
         var selected = App.Data && App.Data._currentEstateId === e.id;
         return '<option value="' + App.UI.escapeHtml(e.id) + '"' + (selected ? ' selected' : '') + '>' + App.UI.escapeHtml(name) + '</option>';
       }).join('');

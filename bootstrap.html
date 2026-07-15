@@ -197,6 +197,32 @@
           // Firestore map keys must be strings; we use the literal uid below.
           estateDoc.roles = {};
           estateDoc.roles[user.uid] = 'executor';
+          // Phase 11: read /users/{uid} BEFORE runTransaction so the
+          // firestore.rules /users/{uid}.read = isSelf(uid) branch
+          // grants access. We embed {displayName, email} into
+          // members.<uid> so the bootstrap founder is renderable as
+          // a name from the executor.html Members card. Read failures
+          // fall through to email + Auth-profile defaults.
+          var _p11Founder = { displayName: '', email: (user.email || '') };
+          try {
+            var _p11UserSnap = await db.collection('users').doc(user.uid).get();
+            if (_p11UserSnap && _p11UserSnap.exists) {
+              var _p11ud = _p11UserSnap.data() || {};
+              if (typeof _p11ud.displayName === 'string') _p11Founder.displayName = _p11ud.displayName.trim();
+              if (typeof _p11ud.email === 'string') _p11Founder.email = _p11ud.email.trim();
+            }
+          } catch (_p11E) { /* swallow -- snapshot falls through to defaults */ }
+          estateDoc.members = {};
+          estateDoc.members[user.uid] = {
+            displayName: _p11Founder.displayName,
+            email: _p11Founder.email,
+            // Phase 12: mirror the joinedAt audit-trail that
+            // createNewEstate + consumeInviteFromUrl write, so
+            // the founder snapshot has the same shape across
+            // every join path.
+            joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
+
 
           // Atomically: assert the lock is unset, then create BOTH the lock
           // doc and the new estate doc in one Firestore runTransaction.

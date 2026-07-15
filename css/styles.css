@@ -25,6 +25,14 @@
   --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
   --radius: 0.5rem;
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Platform Admin banner tints (light mode). Defined here as a
+     reusable quartet so users.html can reuse the same theme by adding
+     the .platform-admin-banner class — no per-element inline literals. */
+  --platform-admin-tint:        rgba(37,99,235,0.05);
+  --platform-admin-tint-border: rgba(37,99,235,0.18);
+  --platform-admin-tone-deep:   #1e40af;
+  --platform-admin-icon-color:  #2563eb;
 }
 
 [data-theme="dark"] {
@@ -52,6 +60,14 @@
   --header-bg: #1e293b;
   --shadow: 0 1px 3px rgba(0,0,0,0.3);
   --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.3);
+
+  /* Platform Admin banner tints (dark mode). The blue jumps up in
+     saturation and the text tones lighten so the banner reads against
+     the dark card bg without glaring. */
+  --platform-admin-tint:        rgba(59,130,246,0.10);
+  --platform-admin-tint-border: rgba(96,165,250,0.30);
+  --platform-admin-tone-deep:   #93c5fd;
+  --platform-admin-icon-color:  #60a5fa;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -869,6 +885,71 @@ body[data-can-manage="true"] .admin-only.table { display: table !important; }
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================
+   PLATFORM ADMIN BANNER
+   Used on users.html (renamed from "Users") to explain the page's
+   scope. Theme-aware via the --platform-admin-* quartet at the top of
+   this file — light tint in light mode, slightly stronger tint and
+   lighter heading tone in dark mode so the card reads against the
+   dark bg. Built on top of the .card primitive — we add only what's
+   banner-specific, since .card already supplies border-radius, shadow,
+   and overflow:hidden.
+   ============================ */
+.platform-admin-banner {
+  background: var(--platform-admin-tint);
+  border: 1px solid var(--platform-admin-tint-border);
+  margin-bottom: 1.5rem;
+}
+
+/* Tighten the inherited .card-body padding for a more compact banner feel. */
+.platform-admin-banner .card-body {
+  padding: 1rem 1.25rem;
+}
+
+.platform-admin-banner-body {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+/* Icon inherits its stroke="currentColor" from the SVG; we only set the
+   currentColor value here. The flex-shrink + tiny top-margin replicate
+   the previous inline styles. */
+.platform-admin-banner-body > svg {
+  color: var(--platform-admin-icon-color);
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.platform-admin-banner h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+  color: var(--platform-admin-tone-deep);
+}
+
+.platform-admin-banner p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.platform-admin-banner ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+/* Any <p> that follows a <ul> or another <p> in the banner is the
+   "see executor.html" footnote — slightly smaller type for hierarchy. */
+.platform-admin-banner ul + p,
+.platform-admin-banner p + p {
+  margin-top: 0.7rem;
+  font-size: 0.8rem;
 }
 
 /* ============================

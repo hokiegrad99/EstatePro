@@ -49,7 +49,29 @@ service cloud.firestore {
     function isPlatformAdmin() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
+        // Phase 8: a soft-deleted Admin loses their powers the moment the
+        // /users/{uid}.isDeleted flag flips to true, even though their
+        // Firebase Auth account might still be alive. We pair this with
+        // sendPasswordResetEmail in App.Auth.deleteUser so the existing
+        // session becomes useless for the next login.
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isDeleted', false) == false;
+    }
+    // ---- Phase 8: soft-delete target validator ----
+    // Lets an Admin set {isDeleted, deletedAt, deletedBy, updatedAt} on
+    // /users/{userId} via a single .update(). userId != self blocks the
+    // Admin from accidentally orphaning themselves through this path
+    // (the isSelf branch in /users/{userId}.update ALSO refuses
+    // isDeleted flips as a defense-in-depth double). Affected-keys check
+    // makes sure no other field can be smuggled in alongside the four
+    // soft-delete flags.
+    function isSoftDeleteTarget(userId) {
+      return isSignedIn()
+        && isPlatformAdmin()
+        && userId != request.auth.uid
+        && request.resource.data.get('isDeleted', false) == true
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['isDeleted', 'deletedAt', 'deletedBy', 'updatedAt']);
     }
     // First-claim one-shot. A signed-in user can self-write
     // {isAdmin:true, isAdminClaimed:true} ONLY when no platform_admin_lock
@@ -249,16 +271,39 @@ service cloud.firestore {
       allow read: if isSelf(userId) || isPlatformAdmin();
       allow create: if isSelf(userId)
         && request.resource.data.email is string;
-      allow update: if isSelf(userId)
-        || isPlatformAdmin()
+      // Phase 8 update rule: each OR-branch has a specific job.
+      //   - isSelf branch lets the user typo-fix their own profile
+      //     (displayName, email) but REFUSES isDeleted flips on yourself
+      //     (an Admin shouldn't be able to self-flag -- another Admin
+      //     must do it via isSoftDeleteTarget below; the in-place check
+      //     here is a defense-in-depth because isSelf fires first in
+      //     OR short-circuit and would otherwise let the Admin pass).
+      //   - isPlatformAdmin branch lets any current Admin update any user.
+      //   - claimFirstAdmin branch closes the one-time founder-claim race.
+      //   - isSoftDeleteTarget branch is the structured soft-delete path
+      //     (4-key whitelist + userId != self). Admins clicking Delete
+      //     in the UI flow through this branch and leave a tidy audit
+      //     log with deletedAt / deletedBy / updatedAt.
+      allow update: if (isSelf(userId)
+        && request.resource.data.get('isDeleted', false)
+           == resource.data.get('isDeleted', false))
+        || (isPlatformAdmin() && request.auth.uid != userId)
         // Phase 6 NEW OR-branch: first-ever self-claim to Admin.
         // Atomicity is enforced at the server: rule demands that the
         // transaction also write /_meta/platform_admin_lock (existsAfter);
         // the lock is the locking primitive that closes the race condition
         // for first-claim because it's !exists on entry and one-create-only.
         // Phase 6 linter fix: pass userId explicitly to claimFirstAdmin().
-        || claimFirstAdmin(userId);
-      allow delete: if isSelf(userId);
+        || claimFirstAdmin(userId)
+        // Phase 8 NEW OR-branch: explicit soft-delete via 4-key
+        // affectedKeys set. See isSoftDeleteTarget() above for the
+        // self-block + affected-keys whitelist rationale.
+        || isSoftDeleteTarget(userId);
+      // Phase 8: open delete to admins as well, so a Phase-8+ admin tool
+      // (or SDK script) can hard-delete a /users/{uid} doc if needed.
+      // The default UI flow uses soft-delete (isDeleted flag), which keeps
+      // an audit trail and lets a future undelete feature work.
+      allow delete: if isSelf(userId) || isPlatformAdmin();
     }
 
     // ---- _meta/{metaId} ----
@@ -469,8 +514,20 @@ service cloud.firestore {
         || (isRemoveMember(estateId)
             && isValidEstateShape(request.resource.data));
 
-      // Phase 4 will add: allow delete for executors.
-      allow delete: if false;
+      // Phase 9: the executor of THIS specific estate OR any platform
+      // Admin can permanently delete the doc. Mirrors the UI gate in
+      // App.Permissions.canDeleteEstate. Subcollection cleanup is the
+      // client-side App.Data.deleteEstate's responsibility: executor +
+      // platform-admin can batch-delete UNREDEEMED invites (the
+      // /invites/{inviteId}.delete rule permits executor + redeemedBy
+      // == null); previously-redeemed invites are NOT deletable by an
+      // executor and will remain as cloud orphans -- surfaced via the
+      // helper's `redeemedInviteOrphans` count for transparency. There
+      // is no .delete on /_meta docs from this rule path (those are
+      // handled by their own match blocks).
+      allow delete: if (isPlatformAdmin()
+        || (isMember(estateId)
+            && resource.data.roles[request.auth.uid] == 'executor'));
 
       // ---- /estates/{estateId}/invites/{inviteId} subcollection ----
       // Phase 4 sub-system 1: invite storage. Each invite is a thin envelope

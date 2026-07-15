@@ -280,7 +280,7 @@
         } else {
           estate.tasks.push(task);
         }
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         App.UI.closeModal('taskModal');
         renderTasks();
       });

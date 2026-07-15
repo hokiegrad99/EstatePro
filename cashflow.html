@@ -678,7 +678,7 @@
         const tx = estate.cashflow.find(t => t.id === id);
         if (tx) revertTxFromEstate(tx, estate);
         estate.cashflow = estate.cashflow.filter(t => t.id !== id);
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         renderCashflow();
       };
 
@@ -737,7 +737,7 @@
           estate.cashflow.push(tx);
           applyTxToEstate(tx, estate);
         }
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         App.UI.closeModal('cashflowModal');
         renderCashflow();
       });

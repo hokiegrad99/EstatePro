@@ -313,7 +313,7 @@
         estate.decedent.ssn = document.getElementById('editDecSsn').value;
         estate.decedent.maritalStatus = document.getElementById('editDecMarital').value;
         estate.decedent.address = document.getElementById('editDecAddress').value;
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         renderDecedent();
         cancelEditDecedent();
       });
@@ -343,7 +343,7 @@
         estate.decedent.countyOfResidence = document.getElementById('editDecCounty').value;
         estate.decedent.funeralHome = document.getElementById('editDecFuneral').value;
         estate.decedent.obituaryPublished = document.getElementById('editDecObit').value;
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         renderDecedent();
         cancelEditDeathDetails();
       });
@@ -426,7 +426,7 @@
           }
         });
         estate.decedent.documents = docs;
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         renderDecedent();
         cancelEditWillDocs();
       });

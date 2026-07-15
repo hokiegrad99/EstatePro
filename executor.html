@@ -320,6 +320,36 @@
         </div>
       </div>
 
+      <!-- Phase 10: Rename Estate (admin-or-executor-of-this-estate) ---
+           Hidden by default; setupRenameEstateUI() flips display on the
+           App.Permissions.canRenameEstate() check. Submit handler lives
+           in the IIFE below alongside the existing setupDeleteEstateUI.
+           Positioned BEFORE the Estate Members card so Admins who land
+           on /executor can rename without scrolling past the longer
+           member roster. -->
+      <div class="card" id="renameEstateCard" style="margin-top:1.5rem; display:none;">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            Estate Name
+          </div>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom:0.75rem; font-size:0.85rem; color:var(--text-secondary);">
+            The friendly name visible in the sidebar selector and printed reports. The Firestore auto-id stays the same --
+            renaming does NOT redirect anything.
+          </p>
+          <form id="renameEstateForm" style="display:grid; grid-template-columns: 1fr auto; gap:0.5rem; align-items:end;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="renameEstateInput">Estate name (max 80 chars)</label>
+              <input type="text" id="renameEstateInput" class="form-input" maxlength="80" placeholder="e.g. Smith Family Estate" required autocomplete="off">
+            </div>
+            <button type="submit" class="btn btn-primary" id="renameEstateBtn" style="height:38px;">Save</button>
+          </form>
+          <div id="renameEstateMessage" style="margin-top:0.5rem;"></div>
+        </div>
+      </div>
+
       <!-- Phase 5: Estate Members (executor-only) -->
       <div class="card" id="membersCard" style="margin-top:1.5rem; display:none;">
         <div class="card-header">
@@ -359,6 +389,35 @@
           </div>
         </div>
       </div>
+      <!-- Phase 9: Danger Zone card. Hidden by default;
+           setupDeleteEstateUI() toggles visibility after
+           App.Permissions.canDeleteEstate check. Gated to the executor of
+           this estate OR a platform Admin -- mirrors the firestore.rules
+           `allow delete` for /estates/{estateId}. Sits at the bottom of
+           <div class="content"> just before the closing </div></div> so
+           dangerous actions live at the visual end of the page surface. -->
+      <div class="card" id="deleteEstateCard" style="margin-top:1.5rem; display:none; border-color: var(--danger-color, #dc2626);">
+        <div class="card-header">
+          <div class="card-title" style="color: var(--danger-color, #dc2626);">
+            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            Danger Zone
+          </div>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom:0.75rem; font-size:0.9rem; color:var(--text-secondary);">
+            Permanently delete this estate. This action <strong>cannot be undone</strong> &mdash; the estate document, every asset, debt, task, cashflow entry, heir record, distribution note, and any pending invitations will be removed from Firebase.
+          </p>
+          <p style="margin-bottom:0.75rem; font-size:0.85rem; color:var(--text-secondary);">
+            <strong>What stays</strong>: your user account, all other estates you&rsquo;re a member of, the Firebase Authentication accounts of every member. Previously-redeemed invitation subdocuments remain in cloud storage as orphans (the ruleset does not let executors delete them).
+          </p>
+          <p id="deleteEstateCardRemaining" style="margin-bottom:1rem; font-size:0.85rem; color:var(--text-secondary); font-style:italic;">&nbsp;</p>
+          <button type="button" class="btn btn-danger" id="openDeleteEstateModalBtn">
+            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg>
+            Delete This Estate
+          </button>
+        </div>
+      </div>
+
     </div>
   </div>
   <!-- Firebase compat SDK (must load before firebase-bridge.js) -->
@@ -452,7 +511,7 @@
         estate.executor.phone = document.getElementById('editExecPhone').value;
         estate.executor.email = document.getElementById('editExecEmail').value;
         estate.executor.dateAppointed = document.getElementById('editExecDate').value;
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         renderExecutor();
         cancelEditExecutor();
       });
@@ -484,7 +543,7 @@
         estate.executor.bondPosted = document.getElementById('editBondPosted').value === 'true';
         estate.executor.ein = document.getElementById('editEIN').value;
         estate.executor.lettersTest = document.getElementById('editLettersTest').value;
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         renderExecutor();
         cancelEditCourt();
       });
@@ -510,7 +569,7 @@
         estate.executor.attorneyName = document.getElementById('editAttName').value;
         estate.executor.attorneyPhone = document.getElementById('editAttPhone').value;
         estate.executor.attorneyEmail = document.getElementById('editAttEmail').value;
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         renderExecutor();
         cancelEditAttorney();
       });
@@ -590,7 +649,7 @@
           }
         });
         estate.executor.documents = docs;
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         renderExecutor();
         cancelEditExecutorDocs();
       });
@@ -612,7 +671,7 @@
         e.preventDefault();
         const estate = App.Data.getEstate();
         estate.executor.notes = document.getElementById('editNotes').value;
-        App.Data.saveEstate(estate);
+        App.Data.saveEstate(estate, true);
         renderExecutor();
         cancelEditNotes();
       });
@@ -755,9 +814,15 @@
         var html = memberIds.map(function (uid) {
           var role = roles[uid] || '(none)';
           var isSelf = currentUser && uid === currentUser.uid;
-          // Firebase uids are alphanumeric in practice, but escapeHtml anyway
-          // as defense-in-depth before they touch any DOM.
-          var shortUid = uid.length > 12 ? uid.substring(0, 7) + '\u2026' + uid.substring(uid.length - 3) : uid;
+          // Phase 11: prefer the snapshot-on-parent friendly name
+          // over the bare UID. shortUid stays as a subtitle for
+          // clarity when two people share a name (e.g. co-executor
+          // twins), and as the fallback when members[uid].displayName
+          // AND email are both missing (deleted profile / legacy
+          // estate before backfill runs).
+          var displayName = App.User.resolveMemberName(estate, uid);
+          var shortUid = App.User.shortUid(uid);
+          var nameIsUid = displayName === shortUid;
           var badgeClass =
             role === 'executor' ? 'badge-info' :
             role === 'heir' ? 'badge-warning' :
@@ -776,8 +841,19 @@
             '<button type="button" class="btn btn-sm btn-danger" data-remove-member-uid="' + App.UI.escapeHtml(uid) + '" onclick="window.removeMemberActionByData(this)"' +
               (isSelf ? ' disabled title="You cannot remove yourself. Have another executor demote you first, then remove you."' : '') +
             '>Remove</button>';
+          // Phase 11: name-first member cell. When the friendly
+          // name resolves, show it bold above a dim short-uid
+          // subtitle so the uid stays reachable for client tooling
+          // without dominating the visual row. When the name chain
+          // falls through to shortUid (legacy backfill not yet run,
+          // deleted /users/{uid}), keep the original code-only look
+          // so the row doesn't look broken (no spurious empty cell).
+          var memberCellHtml = nameIsUid
+            ? '<code style="font-size:0.85rem;">' + App.UI.escapeHtml(shortUid) + '</code>'
+            : '<div style="font-weight:600;">' + App.UI.escapeHtml(displayName) + '</div>' +
+              '<code style="font-size:0.78rem; color:var(--text-secondary);" title="' + App.UI.escapeHtml(uid) + '">' + App.UI.escapeHtml(shortUid) + '</code>';
           return '<tr>' +
-            '<td><code style="font-size:0.85rem;">' + App.UI.escapeHtml(shortUid) + '</code>' +
+            '<td>' + memberCellHtml +
               (isSelf ? ' <span class="badge badge-info">You</span>' : '') + '</td>' +
             '<td><span class="badge ' + badgeClass + '">' + App.UI.escapeHtml(role) + '</span></td>' +
             '<td class="no-print">' + actionCell + '</td>' +
@@ -808,13 +884,18 @@
         if (!uid || !newRole) return;
         var estateId = App.Data.getCurrentEstateId();
         if (!estateId) return;
-        var shortUid = uid.length > 12 ? uid.substring(0, 7) + '\u2026' + uid.substring(uid.length - 3) : uid;
+        // Phase 12: formatMemberLabel returns the composed
+        // 'Name (shortUid)' label so we no longer duplicate the
+        // resolveMemberName/shortUid string-equality ternary
+        // from removeMemberAction.
+        var fml = App.User.formatMemberLabel(App.Data.getEstate(), uid);
+        var displayLabel = fml.label;
         var msgEl = document.getElementById('membersMessages');
-        if (msgEl) msgEl.innerHTML = '<div class="alert alert-info">Updating role for ' + App.UI.escapeHtml(shortUid) + '\u2026</div>';
+        if (msgEl) msgEl.innerHTML = '<div class="alert alert-info">Updating role for ' + App.UI.escapeHtml(displayLabel) + '\u2026</div>';
         try {
           var res = await App.Auth.Invite.updateMemberRole(estateId, uid, newRole);
           if (res && res.success) {
-            if (msgEl) msgEl.innerHTML = '<div class="alert alert-success">Role updated to <strong>' + App.UI.escapeHtml(newRole) + '</strong> for ' + App.UI.escapeHtml(shortUid) + '.</div>';
+            if (msgEl) msgEl.innerHTML = '<div class="alert alert-success">Role updated to <strong>' + App.UI.escapeHtml(newRole) + '</strong> for ' + App.UI.escapeHtml(displayLabel) + '.</div>';
             // Reload so App.Data._cache re-binds to fresh Firestore state (so
             // the executor's own canEdit / canManageUsers reflect any role
             // changes, and other pages see the new state).
@@ -842,17 +923,25 @@
           if (msgElPre) msgElPre.innerHTML = '<div class="alert alert-danger">This is the sole executor. Promote another member to executor first, then they can demote and remove you.</div>';
           return;
         }
-        var shortUid = uid.length > 12 ? uid.substring(0, 7) + '\u2026' + uid.substring(uid.length - 3) : uid;
-        var ok = window.confirm('Remove ' + shortUid + ' from this estate?\n\nThey will lose access after page refresh. You\'ll need to mint a fresh invite if you want to re-admit them.');
+        // Phase 12: use formatMemberLabel for the flash messages;
+        // confirmLine still needs the bare name (with identity-only
+        // branches intact) so the helper exposes displayName +
+        // isIdentityOnly alongside the pre-composed label.
+        var fml = App.User.formatMemberLabel(estate, uid);
+        var confirmLine = fml.isIdentityOnly
+          ? 'Remove ' + fml.displayName + ' from this estate?'
+          : 'Remove ' + fml.displayName + ' from this estate?\n\nFull uid for reference: ' + uid;
+        var ok = window.confirm(confirmLine + '\n\nThey will lose access after page refresh. You\'ll need to mint a fresh invite if you want to re-admit them.');
         if (!ok) return;
         var estateId = App.Data.getCurrentEstateId();
         if (!estateId) return;
         var msgEl = document.getElementById('membersMessages');
-        if (msgEl) msgEl.innerHTML = '<div class="alert alert-info">Removing ' + App.UI.escapeHtml(shortUid) + '\u2026</div>';
+        var displayLabel = fml.label;
+        if (msgEl) msgEl.innerHTML = '<div class="alert alert-info">Removing ' + App.UI.escapeHtml(displayLabel) + '\u2026</div>';
         try {
           var res = await App.Auth.Invite.removeMember(estateId, uid);
           if (res && res.success) {
-            if (msgEl) msgEl.innerHTML = '<div class="alert alert-success">' + App.UI.escapeHtml(shortUid) + ' has been removed from this estate.</div>';
+            if (msgEl) msgEl.innerHTML = '<div class="alert alert-success">' + App.UI.escapeHtml(displayLabel) + ' has been removed from this estate.</div>';
             setTimeout(function () { window.location.reload(); }, 600);
           } else {
             if (msgEl) msgEl.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(res && res.message ? res.message : 'Could not remove member.') + '</div>';
@@ -890,13 +979,258 @@
         }
       });
 
+      // ---- Phase 9: Delete Estate UI gate + 2-stage modal handlers ----
+      // Mounts the Danger Zone card after a permission check; binds the
+      // initial click on "Delete This Estate" to open a stage-1 modal
+      // that promotes to stage-2 (type DELETE to confirm) before the
+      // actual App.Data.deleteEstate() call. Post-success: clear
+      // current-estate localStorage and redirect to dashboard.html.
+      //
+      // Stage toggling is explicit: stage1 has the Continue button +
+      // warning bullets; stage2 has the type-to-confirm input +
+      // Permanently Delete button (disabled until input.value === 'DELETE').
+      // Both buttons coexist in the footer; their visibility flips on
+      // stage change so the modal's chrome stays constant.
+      function setupDeleteEstateUI() {
+        var card = document.getElementById('deleteEstateCard');
+        if (!card) return;
+        var estateId = App.Data.getCurrentEstateId();
+        if (!App.Permissions.canDeleteEstate(estateId)) {
+          card.style.display = 'none';
+          return;
+        }
+        card.style.display = '';
+        var btn = document.getElementById('openDeleteEstateModalBtn');
+        if (btn) btn.addEventListener('click', openDeleteEstateStage1);
+        // Pre-fill name/id helper text so the user can see what's at stake.
+        var helperEl = document.getElementById('deleteEstateCardRemaining');
+        if (helperEl) {
+          var estate = App.Data.getEstate();
+          // Phase 10 fallback chain mirrors initEstateSelector's so the
+          // Danger Zone pre-fill never contradicts the sidebar dropdown:
+          //   1. estate.name (user-set via the Rename card or create modal),
+          //   2. 'Estate of <decedent.fullName>' for legacy Admin-created
+          //      docs that never had a `name` persisted,
+          //   3. '(unnamed estate)' -- last-resort when both `name`
+          //      AND decedent are missing.
+          var decadeName = estate && estate.name
+            ? estate.name
+            : (estate && estate.decedent && (estate.decedent.fullName || estate.decedent.name)
+                ? ('Estate of ' + (estate.decedent.fullName || estate.decedent.name))
+                : '(unnamed estate)');
+          helperEl.innerHTML = 'Estate: <strong>' + App.UI.escapeHtml(decadeName) + '</strong>. Auto-id <code>' + App.UI.escapeHtml(estateId) + '</code> will be freed for future re-use.';
+        }
+      }
+
+      // Stage 1: warning + bullets + Continue button.
+      function openDeleteEstateStage1() {
+        var stage1 = document.getElementById('deleteEstateStage1');
+        var stage2 = document.getElementById('deleteEstateStage2');
+        var continueBtn = document.getElementById('deleteEstateContinueBtn');
+        var confirmBtn = document.getElementById('deleteEstateConfirmBtn');
+        var msgEl = document.getElementById('deleteEstateMessage');
+        if (stage1) stage1.style.display = '';
+        if (stage2) stage2.style.display = 'none';
+        if (continueBtn) continueBtn.style.display = '';
+        if (confirmBtn) confirmBtn.style.display = 'none';
+        if (msgEl) msgEl.innerHTML = '';
+        App.UI.openModal('deleteEstateModal');
+      }
+
+      // Stage 2: typed-confirmation. Enable the Permanently Delete button
+      // only when input.value === 'DELETE' (case-sensitive). The oninput
+      // handler is rebuilt on each open so its closure is per-interaction;
+      // setupDeleteEstateUI wires the click handlers once below.
+      function openDeleteEstateStage2() {
+        var stage1 = document.getElementById('deleteEstateStage1');
+        var stage2 = document.getElementById('deleteEstateStage2');
+        var continueBtn = document.getElementById('deleteEstateContinueBtn');
+        var confirmBtn = document.getElementById('deleteEstateConfirmBtn');
+        var input = document.getElementById('deleteEstateConfirmInput');
+        if (stage1) stage1.style.display = 'none';
+        if (stage2) stage2.style.display = '';
+        if (continueBtn) continueBtn.style.display = 'none';
+        if (confirmBtn) confirmBtn.style.display = '';
+        if (confirmBtn) confirmBtn.disabled = true;
+        if (input) {
+          input.value = '';
+          input.oninput = function () {
+            var c = document.getElementById('deleteEstateConfirmBtn');
+            if (c) c.disabled = (input.value !== 'DELETE');
+          };
+          input.focus();
+        }
+      }
+
+      // Stage 3 (the actual delete). On success: redirect to
+      // dashboard.html so the user lands on a re-rendered page against
+      // whatever estate (if any) is now bound. If the user has no other
+      // estates, the dashboard's "no estate" banner will guide them to
+      // bootstrap.html or restart.
+      async function performDeleteEstate() {
+        var confirmBtn = document.getElementById('deleteEstateConfirmBtn');
+        var msgEl = document.getElementById('deleteEstateMessage');
+        var originalLabel = 'Permanently Delete';
+        if (confirmBtn) {
+          confirmBtn.disabled = true;
+          originalLabel = confirmBtn.textContent;
+          confirmBtn.textContent = 'Deleting...';
+        }
+        var estateId = App.Data.getCurrentEstateId();
+        if (!estateId) {
+          if (msgEl) msgEl.innerHTML = '<div class="alert alert-danger">No active estate to delete.</div>';
+          if (confirmBtn) {
+            confirmBtn.textContent = originalLabel;
+            confirmBtn.disabled = false;
+          }
+          return;
+        }
+        var result = await App.Data.deleteEstate(estateId);
+        if (result && result.success) {
+          if (msgEl) msgEl.innerHTML = '<div class="alert alert-success">' + App.UI.escapeHtml(result.message) + ' Redirecting...</div>';
+          try { localStorage.removeItem('estatepro_active_estate'); } catch (e) { /* ignore */ }
+          setTimeout(function () { window.location.href = 'dashboard.html'; }, 1500);
+        } else {
+          if (msgEl) msgEl.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(result && result.message ? result.message : 'Could not delete estate.') + '</div>';
+          if (confirmBtn) {
+            confirmBtn.textContent = 'Permanently Delete';
+            confirmBtn.disabled = false;
+          }
+        }
+      }
+
+      // Wire-once modal handlers. The modal div is static HTML on the
+      // page so addEventListener binds the click handlers ONCE at script
+      // load and they stay attached for the life of the page.
+      (function wireDeleteEstateModalButtons() {
+        var continueBtn = document.getElementById('deleteEstateContinueBtn');
+        if (continueBtn) continueBtn.addEventListener('click', openDeleteEstateStage2);
+        var confirmBtn = document.getElementById('deleteEstateConfirmBtn');
+        if (confirmBtn) confirmBtn.addEventListener('click', performDeleteEstate);
+      })();
+
+      // ---- Phase 10: Rename Estate UI gate ----
+      // Mirror of the Danger Zone pattern: pre-check the gate, flip the
+      // card's display, pre-fill the input with the current value (or
+      // the derived default), then leave the form submit wired below.
+      function setupRenameEstateUI() {
+        var card = document.getElementById('renameEstateCard');
+        if (!card) return;
+        var estateId = App.Data.getCurrentEstateId();
+        if (!App.Permissions.canRenameEstate(estateId)) {
+          card.style.display = 'none';
+          return;
+        }
+        card.style.display = '';
+        var estate = App.Data.getEstate();
+        var dn = estate && estate.decedent && (estate.decedent.fullName || estate.decedent.name);
+        var initial = (estate && estate.name)
+                    || (dn && ('Estate of ' + dn))
+                    || '';
+        var input = document.getElementById('renameEstateInput');
+        if (input) input.value = initial;
+      }
+
+      // Form submit handler for the rename card. Bound once at script
+      // load (same as the Danger Zone wire-once modal). The handler
+      // re-validates locally before calling App.Data.renameEstate so
+      // an empty-trimmed input shows a friendly alert without a Firestore
+      // round-trip.
+      var renameEstateForm = document.getElementById('renameEstateForm');
+      if (renameEstateForm) {
+        renameEstateForm.addEventListener('submit', async function (e) {
+          e.preventDefault();
+          var msgEl = document.getElementById('renameEstateMessage');
+          var btn = document.getElementById('renameEstateBtn');
+          var input = document.getElementById('renameEstateInput');
+          var name = input ? input.value.trim() : '';
+          if (msgEl) msgEl.innerHTML = '';
+          if (!name) {
+            if (msgEl) msgEl.innerHTML = '<div class="alert alert-danger">Estate name cannot be empty.</div>';
+            return;
+          }
+          if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+          try {
+            var estateId = App.Data.getCurrentEstateId();
+            var res = await App.Data.renameEstate(estateId, name);
+            if (res && res.success) {
+              if (msgEl) msgEl.innerHTML = '<div class="alert alert-success">' + App.UI.escapeHtml(res.message || 'Estate name saved.') + '</div>';
+              // No page reload needed -- App.Data.renameEstate already
+              // updated the in-memory cache + re-rendered the sidebar
+              // selector. The user sees the sidebar dropdown update
+              // instantly while staying on /executor.html.
+            } else {
+              if (msgEl) msgEl.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(res && res.message ? res.message : 'Could not rename estate.') + '</div>';
+            }
+          } catch (err) {
+            if (msgEl) msgEl.innerHTML = '<div class="alert alert-danger">' + App.UI.escapeHtml(err && err.message ? err.message : 'Unknown error') + '</div>';
+          } finally {
+            if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+          }
+        });
+      }
+
       App.onReady(function () {
         renderExecutor();
         renderShareInvites();
         renderMembers();
+        setupDeleteEstateUI();
+        setupRenameEstateUI();
       });
       });
     })();
   </script>
+
+  <!-- Phase 9: Delete Estate confirmation modal (2-stage). Sits at the
+       bottom of <body> alongside any other modals (clearAllEstateData
+       uses inline confirm() so no shadow conflict). Loads before app.js
+       because App.UI.openModal will be called from the script above on
+       button-click; the DOM nodes here need only exist by then, and the
+       script body registers handlers after App.onReady fires. -->
+  <div class="modal-overlay" id="deleteEstateModal" role="dialog" aria-modal="true" aria-labelledby="deleteEstateTitle">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-header">
+        <div class="modal-title" id="deleteEstateTitle" style="color:var(--danger-color, #dc2626);">Permanently delete this estate?</div>
+        <button type="button" class="modal-close" onclick="App.UI.closeModal('deleteEstateModal')" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Stage 1: warning + bullets + Continue. -->
+        <div id="deleteEstateStage1">
+          <p style="margin-bottom:0.75rem; color:var(--text-primary); font-size:0.95rem;">
+            This action <strong>cannot be undone</strong>. After deletion:
+          </p>
+          <ul style="margin-bottom:0.75rem; padding-left:1.25rem; color:var(--text-secondary); font-size:0.9rem; line-height:1.55;">
+            <li>The estate document and all its data disappear from Firebase.</li>
+            <li>Pending (unredeemed) invitations are revoked.</li>
+            <li>Every member &mdash; including you &mdash; loses access after page refresh.</li>
+            <li>The estate&rsquo;s auto-id is freed for re-use by <em>any</em> future founder-bootstrap or Admin-created estate.</li>
+          </ul>
+          <p style="margin-bottom:0; color:var(--text-secondary); font-size:0.85rem; font-style:italic;">
+            Click <strong>Continue&hellip;</strong> below to advance to the typed-confirmation step.
+          </p>
+        </div>
+
+        <!-- Stage 2: type DELETE to confirm. Stage toggling is owned by
+             openDeleteEstateStage1 / openDeleteEstateStage2 below. The
+             #deleteEstateMessage slot is reused for both success and
+             failure feedback inside the modal so the user can read the
+             result without opening another pane. -->
+        <div id="deleteEstateStage2" style="display:none;">
+          <p style="margin-bottom:0.75rem; color:var(--text-primary); font-size:0.95rem;">
+            To proceed, type the word <strong>DELETE</strong> (uppercase, no quotes) below:
+          </p>
+          <div class="form-group">
+            <input type="text" id="deleteEstateConfirmInput" class="form-input" placeholder="Type DELETE to confirm" autocomplete="off" autocapitalize="characters">
+          </div>
+          <div id="deleteEstateMessage" style="margin-top:0.5rem;"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="App.UI.closeModal('deleteEstateModal')">Cancel</button>
+        <button type="button" class="btn btn-danger" id="deleteEstateContinueBtn">Continue&hellip;</button>
+        <button type="button" class="btn btn-danger" id="deleteEstateConfirmBtn" style="display:none;" disabled>Permanently Delete</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
