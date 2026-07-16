@@ -304,7 +304,7 @@
         document.getElementById('decedentCard').style.display = 'block';
       };
 
-      document.getElementById('decedentForm').addEventListener('submit', (e) => {
+      document.getElementById('decedentForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const estate = App.Data.getEstate();
         estate.decedent.fullName = document.getElementById('editDecFullName').value;
@@ -313,7 +313,7 @@
         estate.decedent.ssn = document.getElementById('editDecSsn').value;
         estate.decedent.maritalStatus = document.getElementById('editDecMarital').value;
         estate.decedent.address = document.getElementById('editDecAddress').value;
-        App.Data.saveEstate(estate, true);
+        await App.Data.saveEstate(estate, true);
         renderDecedent();
         cancelEditDecedent();
       });
@@ -335,7 +335,7 @@
         document.getElementById('deathCard').style.display = 'block';
       };
 
-      document.getElementById('deathForm').addEventListener('submit', (e) => {
+      document.getElementById('deathForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const estate = App.Data.getEstate();
         estate.decedent.placeOfDeath = document.getElementById('editDecPlace').value;
@@ -343,7 +343,7 @@
         estate.decedent.countyOfResidence = document.getElementById('editDecCounty').value;
         estate.decedent.funeralHome = document.getElementById('editDecFuneral').value;
         estate.decedent.obituaryPublished = document.getElementById('editDecObit').value;
-        App.Data.saveEstate(estate, true);
+        await App.Data.saveEstate(estate, true);
         renderDecedent();
         cancelEditDeathDetails();
       });
@@ -409,7 +409,7 @@
         editingDocuments = [];
       };
 
-      document.getElementById('willForm').addEventListener('submit', (e) => {
+      document.getElementById('willForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const estate = App.Data.getEstate();
         estate.decedent.willLocation = document.getElementById('editDecWill').value;
@@ -426,7 +426,7 @@
           }
         });
         estate.decedent.documents = docs;
-        App.Data.saveEstate(estate, true);
+        await App.Data.saveEstate(estate, true);
         renderDecedent();
         cancelEditWillDocs();
       });

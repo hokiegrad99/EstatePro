@@ -543,6 +543,18 @@
           renderAll();
         }
       });
+      // Phase 16: close the OUTER App.onReady(function() { ... }) callback.
+      // The previous build had `})();` covering BOTH the inner App.onReady closure
+      // AND the outer IIFE in one expression -- but `})();` only closes ONE brace
+      // and ONE paren before invoking, so the outer IIFE ended up with an open
+      // brace + open call-paren, leaving the engine with a structurally unbalanced
+      // script and silently dropping the App.onReady callback registration. The
+      // dashboard's renderAll() therefore never fired even though every other page
+      // (which had the correct `});` + `})();` pair) populated normally. Splitting
+      // them into `});` + `})();` restores balance. The `()()` invocation of an
+      // undefined App.onReady return value would also have thrown a TypeError at
+      // parse time, but splitting the closers avoids that too.
+      });
     })();
 
     function exportDashboardCSV() {

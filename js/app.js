@@ -3,6 +3,118 @@
    Shared JavaScript Module
    ============================================ */
 
+// Phase 18 (S3 error reporting): capture uncaught exceptions and
+// unhandled promise rejections BEFORE anything else loads so we don't
+// miss errors from the firebase-bridge script itself. Errors land in
+// a localStorage ring buffer (`estatepro_errors`, max 20) for inspection
+// via devtools. Future work (Phase C): POST to Sentry / Firebase
+// Crashlytics once an endpoint is configured. Until then, the buffer
+// is the cheapest possible observability layer that survives page reload.
+(function initErrorReporting() {
+  'use strict';
+  var MAX_ERRORS = 20;
+  var STORAGE_KEY = 'estatepro_errors';
+  var MAX_STACK_LEN = 500;
+
+  // ---- PII redaction (Phase 18 S3 follow-up) ----
+  // Stored error messages / stack traces can leak user emails, Firebase
+  // UIDs (28 alphanumeric chars), Firestore doc IDs (16+ alnum / dash /
+  // underscore), and Firestore error context. We redact BEFORE persisting
+  // to localStorage. The unredacted originals still go to console.error
+  // so live debugging isn't hampered. The console is dev-tools-only and
+  // intentionally kept unredacted; do NOT add redaction there.
+
+  function sanitize(s) {
+    if (typeof s !== 'string') return '';
+    return s
+      // Email addresses -> "<email>"
+      .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '<email>')
+      // Firebase UIDs are 28 alphanumeric chars. Redacts both 28+ char
+      // alnum strings AND any longer hex/base64 blobs (incl. the
+      // founder-secret SHA-256 hash if it ever leaks into an error).
+      .replace(/\b[A-Za-z0-9]{28,}\b/g, '<uid>')
+      // Firestore doc IDs are typically 16+ chars of alnum/dash/underscore.
+      // Slightly aggressive but acceptable for Phase A scope.
+      .replace(/\b[A-Za-z0-9_-]{16,}\b/g, '<docId>');
+  }
+
+  function sanitizeMeta(meta) {
+    if (!meta || typeof meta !== 'object') return {};
+    var out = {};
+    for (var k in meta) {
+      if (!Object.prototype.hasOwnProperty.call(meta, k)) continue;
+      var v = meta[k];
+      if (typeof v === 'string') {
+        // Reviewer H fix: truncation marker goes at the END of the stack.
+        // The first ~200 chars of a stack contain the error message + the
+        // throwing frame (the actionable info for triaging). Putting an
+        // ellipsis at the TOP would push that actionable info below the
+        // 500-char threshold and hide it.
+        out[k] = (k === 'stack' && v.length > MAX_STACK_LEN)
+          ? (v.substring(0, MAX_STACK_LEN) + '\n...[truncated at ' + MAX_STACK_LEN + ' chars]')
+          : sanitize(v);
+      } else if (v && typeof v === 'object') {
+        // Reviewer J fix: an unhandled rejection's `reason` is often a
+        // FirebaseError with .code (e.g. 'permission-denied') + .message
+        // (e.g. 'Missing or insufficient permissions.'). Both are
+        // critical for triage. We preserve name + code + message in a
+        // '[Name (code): message]' envelope, then run sanitize() over
+        // the result so any PII inside the message gets redacted.
+        var _name = (v.name && typeof v.name === 'string') ? v.name : 'Object';
+        var _code = (v.code && typeof v.code === 'string') ? v.code : '';
+        var _msg  = (v.message && typeof v.message === 'string') ? v.message : '';
+        var _env  = '[' + _name + (_code ? ' (' + _code + ')' : '') + (_msg ? ': ' + _msg : '') + ']';
+        out[k] = sanitize(_env);
+      } else {
+        out[k] = v;
+      }
+    }
+    return out;
+  }
+
+  function logError(type, msg, meta) {
+    // Console for live debugging (unredacted; dev-only).
+    try {
+      console.error('[EstatePro ' + type + ']', msg, meta || {});
+    } catch (_) { /* console may be unavailable in some test envs */ }
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      var buf = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(buf)) buf = [];
+      buf.unshift({
+        type: type,
+        msg: sanitize(String(msg == null ? '' : msg)),
+        meta: sanitizeMeta(meta),
+        time: new Date().toISOString(),
+        // Include a short page-context tag so a multi-page reload doesn't
+        // make the buffer look uniform when triaging.
+        page: (typeof window !== 'undefined' && window.location && window.location.pathname)
+          ? window.location.pathname
+          : ''
+      });
+      buf = buf.slice(0, MAX_ERRORS);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(buf));
+    } catch (_) { /* localStorage may be disabled / full / unavailable */ }
+  }
+
+  window.addEventListener('error', function (e) {
+    logError('Error', e && e.message ? e.message : 'Unknown error', {
+      file: e && e.filename,
+      line: e && e.lineno,
+      col: e && e.colno,
+      stack: e && e.error && e.error.stack
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function (e) {
+    var reason = (e && e.reason) != null ? e.reason : 'Unknown';
+    var msg = (reason && reason.message) ? reason.message : String(reason);
+    logError('UnhandledRejection', msg, {
+      stack: reason && reason.stack
+    });
+  });
+})();
+
 // IMPORTANT: we assign both `const App` AND `window.App` to the same merged
 // object. Firebase compat SDK's bridge currently writes `window.App.Firebase`
 // at top level (loads BEFORE this file). A plain `const App = { ... }` would
@@ -1692,57 +1804,75 @@ const App = window.App = Object.assign(window.App || {}, {
       return this._flush();
     },
 
+    // ---- Phase 17: flushAndMirror is the single guarded write entry ----
+    // _flush is preserved as a thin alias so existing call sites
+    // (saveEstate's debounce at line 1626 and any internal recursion at
+    // line 1692) work without churn. The counter wrapper at the IIFE
+    // footer wraps flushAndMirror (NOT _flush), and the local mirror in
+    // the finally block below uses App.Crypto._writeStorageRaw (the
+    // UNWRAPPED primitive) so the _pendingWrites counter never
+    // transiently hits 2.
     async _flush() {
-      // The actual write. Best-effort: if Firestore isn't available OR
-      // we're not bound to a currentEstateId, we mirror the cache into
-      // localStorage so a subsequent reload can recover offline.
+      return this.flushAndMirror();
+    },
+
+    async flushAndMirror() {
       if (!this._cache) return;
-      if (!this._currentEstateId || !App.Firebase || !App.Firebase.db) {
-        try { await App.Crypto.writeStorage('estatepro_estate', this._cache); }
-        catch (e) { /* ignore */ }
-        return;
+      try {
+        // Offline path: skip the Firestore write. The finally block
+        // below still mirrors _cache to localStorage so a subsequent
+        // reload can recover offline. Preserves Phase-15 behavior.
+        if (this._currentEstateId && App.Firebase && App.Firebase.db) {
+          await this._flushCore();
+        }
+      } catch (e) {
+        console.error('[EstatePro] _flushCore failed for estate', this._currentEstateId, e);
+        throw e;
+      } finally {
+        // Phase 15/17: best-effort local mirror runs in BOTH success and
+        // failure paths. The previous write-on-failure-only mirror
+        // meant a healthy round-trip left the legacy App.Data.init()
+        // seed path's localStorage fallback stale. App.Data.init()
+        // reads `estatepro_estate` on the next page load BEFORE
+        // initAsync's Firestore .get() resolves, so a fast cross-tab
+        // navigation can otherwise see a stale local copy for one
+        // paint. Mirroring also on failure (matches Phase-15
+        // failure-mirror semantics) is intentional: we don't lose
+        // state to a stale localStorage when Firestore rejects.
+        // Uses _writeStorageRaw (NOT the wrapped writeStorage) so the
+        // _pendingWrites counter (already +1 from the outer
+        // flushAndMirror wrapper) doesn't briefly hit 2.
+        try { await App.Crypto._writeStorageRaw('estatepro_estate', this._cache); } catch (_) { /* local mirror is best-effort */ }
       }
-      // ---- Phase 13: partial-update payload (round-trip rule-rejection fix) ----
-      // Earlier this function did `JSON.parse(JSON.stringify(this._cache))`
-      // and shoved the entire doc back via .update(). That silently broke
-      // EVERY save from cache because Firestore Timestamps round-trip
-      // through JSON.stringify as plain {seconds:Number, nanoseconds:Number}
-      // objects, NOT as Timestamp instances. The firestore.rules `/estates/{id}`
-      // executor + admin update branches require strict byte-equal on
-      //   createdAt == createdAt, memberIds == memberIds, roles == roles,
-      //   pendingInvites == pendingInvites, createdBy == createdBy,
-      //   __founderSecret (missing OR equal).
-      // A plain-object Timestamp fails the byte-equal check, so the rule
-      // denies the write and the catch block's console.error is the ONLY
-      // signal the user ever sees -- the asset/heir/etc. they just added
-      // sits in the cache and appears to render but never reaches Firestore.
-      //
-      // Fix: send ONLY the explicitly-mutable top-level fields, mirroring
-      // the working partial-update pattern already established by
-      //   - Data.renameEstate()       (Phase 10: .update({name, updatedAt}))
-      //   - Data.backfillLegacyMembers() (Phase 11: dot-path members.<uid>)
-      // updatedAt is stamped with FieldValue.serverTimestamp() so the
-      // cross-device "last write" stamp is server-canonical (not subject
-      // to client clock skew, and remains a Firestore Timestamp rather
-      // than a stringified plain object).
-      var MUTABLE_TOP_LEVEL_KEYS = [
+    },
+
+    async _flushCore() {
+      // ---- Phase 13 + Phase 15: partial-update payload (15 keys incl. frozen fields) ----
+      // Phase 13 replaced the buggy `JSON.parse(JSON.stringify(this._cache))`
+      // round-trip (Timestamps serialized as plain {seconds,nanoseconds}
+      // objects -> executor-rule byte-equal check rejected the write ->
+      // catch block's console.error was the only signal). Phase 15
+      // expanded the 9-key payload to 15 keys by also echoing back the 6
+      // frozen fields (memberIds, roles, pendingInvites, createdBy,
+      // createdAt, __founderSecret). Their cache values are server-origin
+      // bytes preserved verbatim by _normalize(), so the rule's
+      // `request.resource.data.X == resource.data.X` byte-equal check is
+      // satisfied trivially. updatedAt remains FieldValue.serverTimestamp()
+      // so the cross-device "last write" stamp is server-canonical.
+      var ECHO_KEYS = [
+        // Phase 13's 9 mutable page-collection + scalar fields.
         'name', 'decedent', 'executor',
-        'tasks', 'assets', 'debts', 'cashflow', 'heirs', 'distributions'
+        'tasks', 'assets', 'debts', 'cashflow', 'heirs', 'distributions',
+        // Phase 15: 6 frozen fields preserved by _normalize().
+        'memberIds', 'roles', 'pendingInvites', 'createdBy', 'createdAt', '__founderSecret'
       ];
       var payload = {};
-      for (var i = 0; i < MUTABLE_TOP_LEVEL_KEYS.length; i++) {
-        var k = MUTABLE_TOP_LEVEL_KEYS[i];
+      for (var i = 0; i < ECHO_KEYS.length; i++) {
+        var k = ECHO_KEYS[i];
         if (this._cache[k] !== undefined) payload[k] = this._cache[k];
       }
       payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-      try {
-        await App.Firebase.db.collection('estates').doc(this._currentEstateId).update(payload);
-      } catch (e) {
-        console.error('[EstatePro] _flush failed for estate', this._currentEstateId, e);
-        // Mirror to localStorage so we don't lose state on next reload.
-        try { await App.Crypto.writeStorage('estatepro_estate', this._cache); } catch (_) {}
-        throw e;
-      }
+      await App.Firebase.db.collection('estates').doc(this._currentEstateId).update(payload);
     },
 
     getEmptyEstate() {
@@ -2621,7 +2751,19 @@ const App = window.App = Object.assign(window.App || {}, {
     showAlert(container, message, type = 'danger') {
       const alert = document.createElement('div');
       alert.className = `alert alert-${type}`;
-      alert.innerHTML = message;
+      // Phase 18 (S1 XSS hardening): the `message` parameter is
+      // caller-supplied and was previously assigned directly to
+      // .innerHTML. A malicious caller could have injected <script> or
+      // event-handler HTML here, which would execute in this origin's
+      // privilege and could exfiltrate the AES-GCM passphrase from
+      // sessionStorage. We now escape user-controlled content by default
+      // via App.UI.escapeHtml. Callers that genuinely need to render
+      // trusted HTML should pass it through a dedicated helper (or call
+      // .innerHTML directly on a freshly-created element) so the escape
+      // is explicit. Phase A defers the broader multi-line template-
+      // literal audit (see audit report section 3 S1) to a follow-up;
+      // this surgical fix closes the clearest XSS vector first.
+      alert.innerHTML = App.UI.escapeHtml(String(message == null ? '' : message));
       container.prepend(alert);
       setTimeout(() => alert.remove(), 5000);
     },
@@ -3816,7 +3958,14 @@ App.init = async function() {
 
 // Track pending writes to warn before unload
 App._pendingWrites = 0;
+// Phase 17: hoist the unwrapped writeStorage primitive BEFORE the wrapper
+// overrides it. App.Data.flushAndMirror() calls _writeStorageRaw for its
+// post-flush localStorage mirror so the wrapper (which would double-
+// increment _pendingWrites) never re-enters. Without this, the counter
+// briefly hits 2 during the nested writeStorage call inside the wrapped
+// _flush.
 const _originalWriteStorage = App.Crypto.writeStorage.bind(App.Crypto);
+App.Crypto._writeStorageRaw = _originalWriteStorage;
 App.Crypto.writeStorage = async function(key, value) {
   App._pendingWrites++;
   try {
@@ -3825,14 +3974,16 @@ App.Crypto.writeStorage = async function(key, value) {
     App._pendingWrites--;
   }
 };
-// Phase 2: also track Firestore flushes for the beforeunload warning so a
-// debounced save that's already in flight (or a delete's immediate flush)
-// can't be lost to a quick back-button navigation.
-if (App.Data && typeof App.Data._flush === 'function') {
-  const _originalFlush = App.Data._flush.bind(App.Data);
-  App.Data._flush = async function () {
+// Phase 17: wrap flushAndMirror (NOT _flush) for counter tracking. _flush
+// is now a thin alias that delegates to flushAndMirror, so the counter
+// wrapper fires exactly once around the whole write+mirror operation.
+// The mirror inside flushAndMirror uses _writeStorageRaw (not the wrapped
+// writeStorage), so the counter stays at 1 throughout the operation.
+if (App.Data && typeof App.Data.flushAndMirror === 'function') {
+  const _originalFlushAndMirror = App.Data.flushAndMirror.bind(App.Data);
+  App.Data.flushAndMirror = async function () {
     App._pendingWrites++;
-    try { return await _originalFlush(); }
+    try { return await _originalFlushAndMirror(); }
     finally {
       App._pendingWrites = Math.max(0, App._pendingWrites - 1);
     }

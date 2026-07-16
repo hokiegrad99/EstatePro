@@ -1,167 +1,285 @@
-# EstatePro — Firebase Setup (Phase 1)
+# EstatePro — Firebase Setup Guide
 
-This document walks you through turning on the Firebase backend that the
-new multi-user EstatePro will run on.
+This document is the canonical setup + deployment guide for EstatePro. It is
+referenced by `js/firebase-config.js`, `js/firebase-bridge.js`, `index.html`,
+`firestore.rules`, and `bootstrap.html`. If you arrived here from one of
+those source-file comments, jump to the matching section below.
 
-> **You will only do this once per project.** After the founder estate is
-> bootstrapped, every future executor/heir is created via in-app invite flow
-> (Phase 4).
+If `index.html` shows a red **"Firebase is not configured"** banner after
+you open the login page, this file explains every reason that banner can
+appear and how to fix each one.
 
-## 1. Create / pick a Firebase project
+---
 
-1. Go to <https://console.firebase.google.com/> and create a new project
-   (or use an existing free-tier project).
-2. In the project, go to **Build → Authentication → Sign-in method** and
-   enable **Email/Password**.
-3. (Optional, recommended) go to **Build → Firestore Database** and create
-   the database. Pick the production-mode "Start in production mode"; we'll
-   replace the default rules with the file in this repo.
+## 1. One-time setup (first deploy)
 
-## 2. Get your Firebase Web SDK config
+Run these once before any user can sign in:
 
-1. In the Firebase console, **Project settings (gear) → General**.
-2. Scroll to **Your apps** → click **</>** (Web) → register an app named
-   something like "EstatePro GitHub Pages". (Hosting setup is not needed;
-   we stay on GitHub Pages.)
-3. Copy the `firebaseConfig` snippet. Open
-   `js/firebase-config.js` in this repo and paste the values into
-   `window.__FIREBASE_CONFIG__`. Save and commit.
+1. **Create a Firebase project.** Firebase Console -> Add project. Note the
+   `projectId` (you'll need it for `js/firebase-config.js`).
+2. **Enable Email/Password sign-in.** Build -> Authentication -> Sign-in
+   method -> Email/Password -> Enable.
+3. **Enable Cloud Firestore.** Build -> Firestore Database -> Create database.
+   Pick a region close to your users. The `firebase.json` shipped here
+   pins `nam5` (US-central); change it if you deploy elsewhere.
+4. **Register a Web app.** Project settings -> General -> Your apps -> Web
+   app icon. Copy the `firebaseConfig` block — that's what you'll paste
+   into `js/firebase-config.js`.
+5. **Fill in `js/firebase-config.js`.** Replace every field in
+   `window.__FIREBASE_CONFIG__` with the values from step 4. The `apiKey`
+   is intentionally public — Firebase security is enforced by Firestore
+   Rules, not by hiding this key.
+6. **Generate a high-entropy founder secret.** See section 4 below.
+7. **Hash the secret and deploy the rules.** See section 4 below.
+8. **Deploy rules + indexes + hosting.** See section 3 below.
+9. **Sign in to the deployed site and visit `/bootstrap.html`** to mint
+   the very first estate. (Subsequent estates can be minted by a platform
+   Admin from the executor page; only the bootstrap uses the founder secret.)
 
-The `apiKey` here is **safe to expose publicly**. Firebase security is
-enforced by Firestore Rules, not by hiding this key.
+---
 
-## 3. Generate the founder secret + SHA-256
+## 2. Configure `js/firebase-config.js`
 
-The founder secret is a 32-byte random string that gates creation of the
-very first estate. Pick one and keep it offline (you'll discard it after
-bootstrap; only its SHA-256 hash stays in `firestore.rules`).
+Open `js/firebase-config.js` and replace the placeholder values with the
+ones from your Firebase project's Web app registration:
+
+```js
+window.__FIREBASE_CONFIG__ = {
+  "apiKey":            "<your-web-api-key>",
+  "authDomain":        "<projectId>.firebaseapp.com",
+  "projectId":         "<your-project-id>",
+  "storageBucket":     "<projectId>.appspot.com",
+  "messagingSenderId": "<numeric-sender-id>",
+  "appId":             "<1:NNNN:web:XXXX>",
+  "measurementId":     "<G-XXXXXXX>"   // optional, for Analytics
+};
+```
+
+The `apiKey` field is public. Do NOT add IP restrictions here — Firebase
+App Check (see section 7) is the right tool for that.
+
+If the file still contains the literal string `REPLACE_WITH_` anywhere,
+`js/firebase-bridge.js` will emit a console warning on page load.
+
+---
+
+## 3. Deploy modes (hosting vs. firestore)
+
+Phase 18 added a `hosting` block to `firebase.json`. **A bare
+`firebase deploy` now publishes BOTH `firestore` and `hosting`.** Pick the
+narrowest target that matches what you changed:
+
+| What you changed            | Command                                                |
+| --------------------------- | ------------------------------------------------------ |
+| `firestore.rules` only      | `firebase deploy --only firestore:rules`               |
+| `firestore.indexes.json`    | `firebase deploy --only firestore:indexes`             |
+| Both rules + indexes        | `firebase deploy --only firestore`                     |
+| `firebase.json` (hosting)   | `firebase deploy --only hosting`                       |
+| New static files (HTML/CSS/JS) | `firebase deploy --only hosting`                   |
+| Everything (full release)   | `firebase deploy`                                      |
+
+`firebase.json#hosting.ignore` excludes the following from being served
+publicly:
+
+```
+firebase.json, firestore.rules, firestore.indexes.json, .firebaserc,
+README.md, package.json, package-lock.json, **/.*, **/node_modules/**
+```
+
+The founder-secret SHA-256 inside `firestore.rules` is therefore NOT
+served at any URL.
+
+`firebase-config.js` IS served (it's loaded by every page via
+`<script src="js/firebase-config.js">`). That is intentional — Firebase
+Web SDK requires the API key in the browser. The `apiKey` is public-by-
+design; security is enforced entirely by Firestore Rules.
+
+---
+
+## 4. Founder secret — generate, hash, deploy
+
+The **founder secret** is a one-time-use passphrase that gates the very
+first estate's creation. After `bootstrap.html` mints the first estate,
+the secret is no longer needed (the bootstrap lock makes the path
+permanently one-shot per project).
+
+### 4.1 Generate a high-entropy secret
+
+The secret must have at least 128 bits of entropy. Human-chosen passwords
+are NOT acceptable — SHA-256 of a weak secret is brute-forceable offline
+in seconds. Use a cryptographically-random generator:
 
 ```bash
-# 1. Generate a 64-character hex secret (32 random bytes)
-SECRET=$(openssl rand -hex 32)
-echo "Secret (keep offline): $SECRET"
+# Option A: Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
-# 2. Compute SHA-256 hex of the secret (this goes into firestore.rules)
-echo -n "$SECRET" | shasum -a 256 | awk '{print $1}'
+# Option B: OpenSSL
+openssl rand -hex 32
+
+# Option C: /dev/urandom
+head -c 32 /dev/urandom | xxd -p -c 64
 ```
 
-The second command prints the hex you'll paste into `firestore.rules`.
+Output is 64 hex characters (e.g. `9f2c8a3b...`). Save it in a password
+manager NOW. After you paste it into the rules file's SHA-256 slot, you
+should NOT need it again — `bootstrap.html` re-hashes whatever the
+operator types at runtime.
 
-## 4. Edit firestore.rules
-
-Open `firestore.rules` and replace the placeholder constant:
-
-```
-... == 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-```
-
-with the SHA-256 hex you just produced. (You'll do this **before**
-the first deploy.)
-
-## 5. Deploy the rules
+### 4.2 Compute the SHA-256 to paste into `firestore.rules`
 
 ```bash
-# Install the Firebase CLI once (any host)
-npm install -g firebase-tools
-
-# Log in
-firebase login
-
-# From the repo root, point the CLI at your project
-firebase use --add            # select your project from the list
-
-# Deploy only the rules (and indexes, when you have them)
-firebase deploy --only firestore:rules,firestore:indexes
+# Replace <SECRET> with the hex string from step 4.1.
+echo -n "<SECRET>" | sha256sum
 ```
 
-You can verify the rule in the Firebase Console under
-**Firestore → Rules**.
+Output is 64 hex characters of the SHA-256 hash. Open `firestore.rules`
+and replace the `__founderSecret` constant on the `allow create:` branch
+of `match /estates/{estateId}`:
 
-## 6. Ship the GitHub Pages frontend
-
-Push your changes (including the filled-in `js/firebase-config.js`) to the
-branch GitHub Pages serves from. Make sure the HTML pages load scripts in
-this order:
-
-```html
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
-
-<!-- App config (user-edited) -->
-<script src="js/firebase-config.js"></script>
-
-<!-- Firebase -> App.Firebase bridge -->
-<script src="js/firebase-bridge.js"></script>
-
-<!-- Main app -->
-<script src="js/app.js"></script>
+```diff
+-   && request.resource.data.__founderSecret
+-     == '<your-sha256-hex-from-step-4.2>'
++   && request.resource.data.__founderSecret
++     == '<your-sha256-hex-from-step-4.2>'
 ```
 
-`index.html` and `bootstrap.html` already include this order in Phase 1.
+### 4.3 Audit S4 — the hash in  SHOULD be a placeholder
 
-## 7. First sign-up
-
-1. Open your GitHub Pages URL → `index.html`.
-2. Click **Register**, enter Full Name + Email + Password (≥ 6 chars).
-3. Sign in.
-
-The new `App.Auth` wrapper creates:
-- A Firebase Auth user
-- A `users/{uid}` Firestore profile doc
-
-> **If you see a red "Firebase is not configured" banner above the form**
-> with a specific reason, that is the helpful replacement for the old
-> "Cannot read properties of undefined (reading 'db')" error. The most
-> common causes are:
-> - **You haven't enabled Firestore yet.** The Auth service is enabled but
->   the Firestore service isn't — go to **Build → Firestore Database** in
->   the Firebase console and click **Create database**.
-> - **`firebase-config.js` still has placeholders.** Paste your real
->   Firebase Web SDK config values into `js/firebase-config.js` (step 2).
-> - **The Firebase SDK `<script>` tags aren't before `js/firebase-bridge.js`
->   in your HTML.** Verify the order in step 6.
+> **Audit finding S4 (HIGH)**: the project as shipped commits the founder-secret
+> SHA-256 to a public git repo ( +  are both tracked).
+> If the original secret was human-chosen (low entropy), this hash is
+> offline-brute-forceable in seconds with . **Always generate the
+> secret via 763a78b6db5eac57abe58b5dd6fc9f5ddab0d14148ab9735fbacda838264a7d9
+> (or 81af0da8eb8f9e449806e2d0332601f275d98eb3f50d53c55e4719e2d6862f45) — never a human-chosen passphrase.**
 >
-> If the banner doesn't show but registration still errors, check the
-> browser dev tools Console for the full stack trace.
+> For deeper defense, replace the rule's hard-coded hash with a deploy-time
+> template variable (e.g.,  + CI  substitution
+> into ), then  the rendered rules file. The
+> production rules engine never sees the template.
 
-## 8. Founder bootstrap
+### 4.4 Deploy the rules
 
-1. While signed in, visit `bootstrap.html`.
-2. Enter an Estate name.
-3. Paste the secret you generated in step **3**.
-4. Click **Create Estate**.
+```bash
+firebase deploy --only firestore:rules
+```
 
-The page SHA-256s the secret in the browser, then submits a single
-`set()` call to `estates/{newId}` carrying `__founderSecret` plus an
-empty `pendingInvites` and `memberIds=[<your uid>], roles[<your uid>]=
-'executor'`. The Firestore Rule confirms the hash matches your deployed
-constant.
+### 4.4 Run the bootstrap
 
-If you get "Permission denied", the most common cause is the hash constant
-not matching — recheck step 4.
+Visit `https://<your-project>.web.app/bootstrap.html`, sign in, paste the
+original secret (NOT the SHA-256 hex), and submit. The browser hashes
+the secret in-place before sending; the plaintext never leaves the page.
+On success, `/_meta/bootstrap_lock` is written and the founder path is
+permanently closed.
 
-## 9. After the first estate is up
+### 4.5 Rotate the secret
 
-You're done with Phase 1. You now have:
-- A Firebase project with Email/Password auth enabled.
-- A single estate you own as Executor.
-- A user profile doc.
+If you need to change the secret:
 
-Phase 2 will replace `App.Data` to back the estate with Firestore reads
-and debounced writes. Phase 4 will add invite URLs and the multi-estate
-sidebar dropdown.
+1. Compute a new SHA-256 from a new random secret (steps 4.1–4.2).
+2. Edit `firestore.rules` and update the constant.
+3. `firebase deploy --only firestore:rules`.
 
-## Security notes
+If the bootstrap lock already exists, the founder path is dead anyway —
+the rule's `!isBootstrapLocked()` guard refuses every subsequent attempt.
+To re-enable the path on an existing project, the lock doc would have
+to be deleted by hand via the Firebase Console or Admin SDK. There is
+no UI for that on purpose.
 
-- The founder secret is never sent to the server in plaintext. Only its
-  SHA-256 ever leaves the browser.
-- The precomputed hash constant is in `firestore.rules`, which Firebase
-  stores server-side. **Do not** publish this file to a public URL.
-- If you want to rotate the secret (after Phase 1 setup), generate a new
-  secret + new SHA-256, deploy rules, then visit `bootstrap.html` once.
-  After that, anyone who creates a new estate without the secret will be
-  blocked by the rule.
-- Free tier limits (Spark plan): 50k Firestore reads/day, 20k writes/day,
-  1 GB storage, 50k Auth MAUs.
+---
+
+## 5. Firestore indexes
+
+`firestore.indexes.json` declares composite indexes that the query layer
+needs. The current schema has one index:
+
+```json
+{
+  "collectionId": "invites",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "redeemedBy", "order": "ASCENDING" },
+    { "fieldPath": "createdAt", "order": "DESCENDING" }
+  ]
+}
+```
+
+This backs `App.Auth.Invite.listPendingInvites`, which sorts unredeemed
+invites by creation date. Without the index, that query throws the
+classic Firestore "The query requires an index" error; the executor
+dashboard's "Pending Invitations" card will display the actionable
+hint appended by `listPendingInvites`'s catch block.
+
+```bash
+firebase deploy --only firestore:indexes
+```
+
+Build the index takes a few minutes; Firestore will return
+`FAILED_PRECONDITION` from the query until it's ready.
+
+---
+
+## 6. Security headers (CSP, HSTS, etc.)
+
+`firebase.json#hosting.headers` ships a strict Content-Security-Policy
+plus the standard hardening headers (X-Frame-Options, X-Content-Type-
+Options, HSTS, Referrer-Policy, Permissions-Policy).
+
+`script-src` and `style-src` currently allow `'unsafe-inline'` because
+the 8 estate HTML pages use inline `<script>` blocks and 227 inline
+`style="..."` attributes. **This is a Phase A trade-off.** Phase C work
+will extract inline scripts to ES modules and promote inline styles to
+CSS classes, at which point both `'unsafe-inline'` directives will be
+dropped.
+
+`firebase-config.js` is intentionally NOT in `hosting.ignore` (it MUST
+be served as a `<script>`). The `apiKey` it exposes is public-by-design.
+
+---
+
+## 7. Recommended next steps
+
+- **Firebase App Check.** Enable App Check with reCAPTCHA Enterprise so
+  only requests from your domain can hit the Firestore backend. Without
+  App Check, anyone can copy your `apiKey` and burn your free-tier quota.
+- **Platform Admin claim.** After the first user signs in, visit
+  `/dashboard.html` (or `/users.html`) and have that user call
+  `App.Auth.Admin.claimAdmin()` to install the first platform Admin.
+  See `firestore.rules#claimFirstAdmin` for the one-shot semantics.
+- **MFA for Admins.** Firebase Auth supports TOTP MFA via
+  `signInWithMultiFactor`. Recommend enforcing it for any account with
+  `isAdmin == true`.
+
+---
+
+## 8. Troubleshooting
+
+| Symptom                                                      | Likely cause                                                                                                                                  |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.html` shows red "Firebase is not configured" banner   | `App.Firebase.isReady()` returned false. Check browser devtools console for the exact reason. Most often: Firestore not enabled, or `js/firebase-config.js` still has `REPLACE_WITH_` placeholders. |
+| `bootstrap.html` rejects the secret with "Permission denied"  | The SHA-256 of what you typed does NOT match the constant in `firestore.rules`. Re-check the hash, confirm `firebase deploy --only firestore:rules` has been run since the last edit. |
+| "The query requires an index" error on the Pending Invites card | `firestore.indexes.json` not yet deployed, or the index build is still in progress. Run `firebase deploy --only firestore:indexes` and wait a few minutes. |
+| "Missing or insufficient permissions" on a write             | The executor-write branch requires `roles[uid] == 'executor'`. Heirs / beneficiaries cannot mutate the estate doc. Use `App.Auth.Invite.consumeInviteFromUrl` (joiner) or ask an executor to change your role. |
+| `firebase deploy` fails with "Site not found"                | `.firebaserc` does not have a `default` alias pointing at the project you deployed. Run `firebase use --add` and pick the project, or set `default` in `.firebaserc`. |
+| Inline `<script>` blocked after Phase C                      | A future CSP tightening will drop `'unsafe-inline'` from `script-src`. Migrate inline scripts to `<script type="module" src="js/<page>.js">` BEFORE the deploy. |
+| Dashboard shows "Missing or insufficient permissions" for a member | The user's uid is not in `estates/{id}.memberIds`. Either (a) they need to consume their invite URL, or (b) the executor removed them from the estate. The page-side gate `App.Permissions.canView` reads `roles[uid]` and will redirect to `index.html` if no role. |
+| Founder-secret bootstrap rejected with no error message         | The SHA-256 in `firestore.rules` was edited locally but not redeployed. Run `firebase deploy --only firestore:rules`. Check the browser console — the bootstrap error path appends "The SHA-256 of the secret you entered does not match the constant in firestore.rules" if the server rejected the write. |
+| Custom inline script blocked by CSP                            | With `'unsafe-inline'` in `script-src` (Phase A trade-off), simple inline scripts work. If you add a strict CSP later, either keep the nonce pattern OR move the script into `js/<page>.js` and load via `<script type="module">`. |
+
+---
+
+## 9. Related files
+
+| Path                          | What it does                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `firebase.json`               | Firebase project config — Firestore rules + indexes source paths, Hosting public + headers + ignore list |
+| `.firebaserc`                 | Project alias map                                                                                       |
+| `firestore.rules`             | Security rules (Phase 1–9 hardening)                                                                    |
+| `firestore.indexes.json`      | Composite index declarations                                                                            |
+| `js/firebase-config.js`       | Per-project web SDK config (`apiKey`, `projectId`, etc.)                                                |
+| `js/firebase-bridge.js`       | Initializes the Firebase SDKs and exposes `App.Firebase.{app,auth,db}`                                  |
+| `js/app.js`                   | The shared application (Auth, Data, UI, Crypto, Permissions, Invite, Admin)                            |
+| `bootstrap.html`              | One-time founder-estate creation form                                                                   |
+| `index.html`                  | Login / register landing page                                                                           |
+| `dashboard.html` + 8 estate pages | The data-entry UIs (dashboard, tasks, executor, decedent, assets, debts, cashflow, distributions, heirs) |
+
+See `README.md` for a one-paragraph project overview.

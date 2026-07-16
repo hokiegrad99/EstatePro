@@ -502,7 +502,7 @@
         document.getElementById('executorCard').style.display = 'block';
       };
 
-      document.getElementById('executorForm').addEventListener('submit', (e) => {
+      document.getElementById('executorForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const estate = App.Data.getEstate();
         estate.executor.name = document.getElementById('editExecName').value;
@@ -511,7 +511,7 @@
         estate.executor.phone = document.getElementById('editExecPhone').value;
         estate.executor.email = document.getElementById('editExecEmail').value;
         estate.executor.dateAppointed = document.getElementById('editExecDate').value;
-        App.Data.saveEstate(estate, true);
+        await App.Data.saveEstate(estate, true);
         renderExecutor();
         cancelEditExecutor();
       });
@@ -534,7 +534,7 @@
         document.getElementById('courtCard').style.display = 'block';
       };
 
-      document.getElementById('courtForm').addEventListener('submit', (e) => {
+      document.getElementById('courtForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const estate = App.Data.getEstate();
         estate.executor.courtName = document.getElementById('editCourtName').value;
@@ -543,7 +543,7 @@
         estate.executor.bondPosted = document.getElementById('editBondPosted').value === 'true';
         estate.executor.ein = document.getElementById('editEIN').value;
         estate.executor.lettersTest = document.getElementById('editLettersTest').value;
-        App.Data.saveEstate(estate, true);
+        await App.Data.saveEstate(estate, true);
         renderExecutor();
         cancelEditCourt();
       });
@@ -563,13 +563,13 @@
         document.getElementById('attorneyCard').style.display = 'block';
       };
 
-      document.getElementById('attorneyForm').addEventListener('submit', (e) => {
+      document.getElementById('attorneyForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const estate = App.Data.getEstate();
         estate.executor.attorneyName = document.getElementById('editAttName').value;
         estate.executor.attorneyPhone = document.getElementById('editAttPhone').value;
         estate.executor.attorneyEmail = document.getElementById('editAttEmail').value;
-        App.Data.saveEstate(estate, true);
+        await App.Data.saveEstate(estate, true);
         renderExecutor();
         cancelEditAttorney();
       });
@@ -634,7 +634,7 @@
         editingExecDocuments = [];
       };
 
-      document.getElementById('execDocsForm').addEventListener('submit', (e) => {
+      document.getElementById('execDocsForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const estate = App.Data.getEstate();
         // Read all document values directly from DOM to avoid stale onchange data
@@ -649,7 +649,7 @@
           }
         });
         estate.executor.documents = docs;
-        App.Data.saveEstate(estate, true);
+        await App.Data.saveEstate(estate, true);
         renderExecutor();
         cancelEditExecutorDocs();
       });
@@ -667,11 +667,11 @@
         document.getElementById('notesCard').style.display = 'block';
       };
 
-      document.getElementById('notesForm').addEventListener('submit', (e) => {
+      document.getElementById('notesForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const estate = App.Data.getEstate();
         estate.executor.notes = document.getElementById('editNotes').value;
-        App.Data.saveEstate(estate, true);
+        await App.Data.saveEstate(estate, true);
         renderExecutor();
         cancelEditNotes();
       });

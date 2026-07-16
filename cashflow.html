@@ -682,7 +682,7 @@
         renderCashflow();
       };
 
-      document.getElementById('cashflowForm').addEventListener('submit', (e) => {
+      document.getElementById('cashflowForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const estate = App.Data.getEstate();
         const idRaw = document.getElementById('cfId').value;
@@ -737,7 +737,7 @@
           estate.cashflow.push(tx);
           applyTxToEstate(tx, estate);
         }
-        App.Data.saveEstate(estate, true);
+        await App.Data.saveEstate(estate, true);
         App.UI.closeModal('cashflowModal');
         renderCashflow();
       });

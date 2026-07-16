@@ -395,7 +395,7 @@ service cloud.firestore {
             && request.resource.data.__founderSecret is string
             && request.resource.data.__founderSecret.size() == 64
             && request.resource.data.__founderSecret
-              == '4473143dc63f754c10f105c8cda97d119c3bb95cce7b50ae0cebc7cb00594175'
+              == '33369ae700b2b16f4e0c6fe93620afa30102b958786b496bf042a901de0dda72'
             && request.resource.data.memberIds.size() == 1
             && request.resource.data.memberIds[0] == request.auth.uid
             && request.resource.data.roles[request.auth.uid] == 'executor'

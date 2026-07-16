@@ -268,7 +268,7 @@
         renderHeirs();
       };
 
-      document.getElementById('heirForm').addEventListener('submit', (e) => {
+      document.getElementById('heirForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const estate = App.Data.getEstate();
         const id = document.getElementById('heirId').value;
@@ -290,7 +290,7 @@
         } else {
           estate.heirs.push(heir);
         }
-        App.Data.saveEstate(estate, true);
+        await App.Data.saveEstate(estate, true);
         App.UI.closeModal('heirModal');
         renderHeirs();
       });

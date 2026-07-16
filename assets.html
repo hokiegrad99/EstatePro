@@ -282,7 +282,7 @@
         renderAssets();
       };
 
-      document.getElementById('assetForm').addEventListener('submit', (e) => {
+      document.getElementById('assetForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const estate = App.Data.getEstate();
         const id = document.getElementById('assetId').value;
@@ -303,7 +303,7 @@
         } else {
           estate.assets.push(asset);
         }
-        App.Data.saveEstate(estate, true);
+        await App.Data.saveEstate(estate, true);
         App.UI.closeModal('assetModal');
         renderAssets();
       });
